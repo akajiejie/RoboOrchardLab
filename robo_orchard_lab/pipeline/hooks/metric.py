@@ -1,0 +1,258 @@
+# Project RoboOrchard
+#
+# Copyright (c) 2024 Horizon Robotics. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#       http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
+# implied. See the License for the specific language governing
+# permissions and limitations under the License.
+
+import logging
+from abc import abstractmethod
+from dataclasses import dataclass
+from typing import (
+    Any,
+    Iterable,
+    Literal,
+    Sequence,
+    Tuple,
+    Union,
+)
+
+from torchmetrics import Metric
+
+from robo_orchard_lab.pipeline.hooks.mixin import HookArgs, HookMixin
+from robo_orchard_lab.utils import as_sequence
+
+__all__ = ["MetricEntry", "MetricTracker"]
+
+logger = logging.getLogger(__file__)
+
+
+@dataclass
+class MetricEntry:
+    """A class representing an entry for tracking a metric.
+
+    Attributes:
+        names (Sequence[str]): A sequence of names for each metric value.
+        metric (Metric): The metric object from `torchmetrics` for computation.
+
+    Methods:
+        get: Retrieves the names and computed metric values as pairs.
+    """
+
+    names: Sequence[str]
+    metric: Metric
+
+    def __post_init__(self) -> None:
+        """Initializes the names attribute as a sequence."""
+        self.names = as_sequence(self.names)
+
+    def get(self) -> Iterable[Tuple[str, Any]]:
+        """Computes and retrieves the metric values along with their names.
+
+        Returns:
+            Iterable[Tuple[str, Any]]: A sequence of (name, value) pairs for
+                the metric.
+
+        Raises:
+            AssertionError: If the number of names does not match the number
+                of metric values.
+        """
+        values = as_sequence(self.metric.compute())
+        assert len(self.names) == len(values), (
+            "The length of names and metric values should be the same, but get {} vs. {}".format(  # noqa: E501
+                len(self.names), len(values)
+            )
+        )
+        return zip(self.names, values, strict=False)
+
+
+class MetricTracker(HookMixin):
+    """A hook for updating and logging metrics.
+
+    Attributes:
+        metric_entrys (Sequence[MetricEntry]): A sequence of MetricEntry
+            instances.
+        reset_by (Literal["epoch", "step"]): Frequency basis for metric
+            reset ("epoch" or "step").
+        reset_freq (int): Frequency to reset metrics.
+        step_log_freq (int): Frequency of logging at the step level.
+        epoch_log_freq (int): Frequency of logging at the epoch level.
+        log_main_process_only (int): Only logging in the main processor or not.
+
+    Methods:
+        on_loop_begin: Moves metrics to the correct device at the start of
+            the loop.
+        on_batch_end: Updates metrics at the end of each batch.
+        on_step_end: Logs and optionally resets metrics at the end of a step.
+        on_epoch_end: Logs and optionally resets metrics at the end of an
+            epoch.
+
+    """
+
+    def __init__(
+        self,
+        metric_entrys: Union[MetricEntry, Sequence[MetricEntry]],
+        reset_by: Literal["epoch", "step"] = "epoch",
+        reset_freq: int = 1,
+        step_log_freq: int = 512,
+        epoch_log_freq: int = 1,
+        log_main_process_only: bool = True,
+    ) -> None:
+        """Initialization.
+
+        Args:
+            metric_entrys (Union[MetricEntry, Sequence[MetricEntry]]): Single
+                or multiple metric entries to update.
+            reset_by (Literal["epoch", "step"], optional): Basis for resetting
+                metrics; either "epoch" or "step".
+            reset_freq (int, optional): Frequency to reset metrics.
+                Defaults to 1.
+            step_log_freq (int, optional): Frequency to log at the step level.
+                Defaults to 512.
+            epoch_log_freq (int, optional): Frequency to log at the epoch
+                level. Defaults to 1.
+            log_main_process_only (int, optional): Only logging in the main
+                processor or not. Defaults to True.
+        """
+        self.metric_entrys = as_sequence(metric_entrys)
+        self.metrics = [entry_i.metric for entry_i in self.metric_entrys]
+        self.reset_by = reset_by
+        self.reset_freq = reset_freq
+        self.step_log_freq = step_log_freq
+        self.epoch_log_freq = epoch_log_freq
+        self.log_main_process_only = log_main_process_only
+
+        self._reset()
+
+    @abstractmethod
+    def update_metric(self, batch: Any, model_outputs: Any) -> None:
+        """Updates the metrics using the current batch data and model outputs.
+
+        This method must be implemented in subclasses to define how the metrics
+        in `self.metrics` are updated during training or evaluation.
+        The implementation should handle the logic for calling `update`
+        on each metric.
+
+        Args:
+            batch (Any): The current batch of data from the dataset. It is
+                expected to contain all necessary inputs (e.g., features,
+                labels) required for metric computation.
+            model_outputs (Any): The outputs produced by the model for the
+                given batch. This could include predictions, probabilities,
+                logits, or other outputs, depending on the model architecture
+                and task.
+
+        Example:
+            A typical implementation in a subclass might look like this:
+
+            ```python
+            class CustomMetricTracker(MetricTracker):
+                def update_metric(self, batch, model_outputs):
+                    for metric in self.metrics:
+                        metric.update(batch["label"], model_outputs["pred"])
+            ```
+        """
+
+    def _reset(self) -> None:
+        """Resets all metrics to their initial states."""
+        for metric_i in self.metrics:
+            metric_i.reset()
+
+    def _log(self, prefix: str = "", is_main_process: bool = True) -> None:
+        """Logs the computed metric values with an optional prefix."""
+        msg = prefix
+        for entry_i in self.metric_entrys:
+            for k, v in entry_i.get():
+                if isinstance(v, (int, float)):
+                    msg += "%s[%.4f] " % (k, v)
+                else:
+                    msg += "%s[%s] " % (str(k), str(v))
+        if self.log_main_process_only and not is_main_process:
+            return
+        logger.info(msg)
+
+    def on_loop_begin(self, args: HookArgs) -> None:
+        """Callback when loop begins.
+
+        Prepares metrics for computation by moving them to the appropriate
+        device.
+
+        Args:
+            args (HookArgs): Arguments containing the accelerator with
+            device information.
+        """
+        for metric_i in self.metrics:
+            metric_i.to(args.accelerator.device)
+
+    def on_batch_end(self, args: HookArgs) -> None:
+        """Callback when batch ends.
+
+        Updates metrics using the `metric_update_fn` at the end of each batch.
+
+        Args:
+            args (HookArgs): Arguments containing the batch data and
+            model outputs.
+        """
+        self.update_metric(args.batch, args.model_outputs)
+
+    def on_step_end(self, args: HookArgs) -> None:
+        """Callback when step ends.
+
+        Logs metrics and optionally resets them at the end of a step based
+        on `step_log_freq`.
+
+        Args:
+            args (HookArgs): Arguments containing the current step and epoch
+            IDs.
+        """
+
+        if (
+            self.step_log_freq > 0
+            and (args.step_id + 1) % self.step_log_freq == 0
+        ):
+            prefix = "Epoch[{}] Step[{}] GlobalStep[{}]: ".format(
+                args.epoch_id, args.step_id, args.global_step_id
+            )
+            self._log(
+                prefix=prefix, is_main_process=args.accelerator.is_main_process
+            )
+
+        if (
+            self.reset_by == "step"
+            and (args.global_step_id + 1) % self.reset_freq == 0
+        ):
+            self._reset()
+
+    def on_epoch_end(self, args: HookArgs) -> None:
+        """Callback when epoch ends.
+
+        Logs metrics and optionally resets them at the end of an epoch
+        based on `epoch_log_freq`.
+
+        Args:
+            args (HookArgs): Arguments containing the current epoch ID.
+        """
+
+        if (
+            self.epoch_log_freq > 0
+            and (args.epoch_id + 1) % self.epoch_log_freq == 0
+        ):
+            prefix = "Epoch[{}]: ".format(args.epoch_id)
+            self._log(
+                prefix=prefix, is_main_process=args.accelerator.is_main_process
+            )
+
+        if (
+            self.reset_by == "epoch"
+            and (args.epoch_id + 1) % self.reset_freq == 0
+        ):
+            self._reset()

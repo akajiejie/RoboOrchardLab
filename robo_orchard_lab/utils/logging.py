@@ -1,0 +1,92 @@
+# Project RoboOrchard
+#
+# Copyright (c) 2024 Horizon Robotics. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#       http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
+# implied. See the License for the specific language governing
+# permissions and limitations under the License.
+
+import logging
+
+from robo_orchard_lab.distributed.utils import get_dist_info
+
+__all__ = ["basic_config"]
+
+
+def basic_config(
+    format: str = "%rank %(asctime)s %(levelname)s %(name)s:%(lineno)d %(message)s",  # noqa
+    datefmt: str = "%m/%d/%Y %H:%M:%S",
+    **kwargs,
+):
+    """Configures the logging system for distributed training environments.
+
+    This function extends Python's `logging.basicConfig` to include
+    distributed rank information (`%rank`) in the log format. It replaces
+    the `%rank` placeholder with the rank and world size
+    from `get_dist_info()`.
+
+    Args:
+        format (str, optional): The log message format. Default value is
+            "%rank %(asctime)s %(levelname)s %(name)s:%(lineno)d %(message)s".
+            - `%rank`: A placeholder replaced with "Rank[<rank>/<world_size>]".
+            - Other placeholders include:
+              - `%(asctime)s`: Timestamp of the log message.
+              - `%(levelname)s`: Log severity level (e.g., DEBUG, INFO).
+              - `%(name)s`: Name of the logger.
+              - `%(lineno)d`: Line number where the log was issued.
+        datefmt (str, optional): Date and time format for log messages.
+            Default: "%m/%d/%Y %H:%M:%S".
+        **kwargs: Additional arguments passed to `logging.basicConfig`, such as
+            `level`.
+
+    Raises:
+        TypeError: If `format` or `datefmt` is not a string.
+        ValueError: If `get_dist_info()` fails to return valid rank/world_size.
+
+    Examples:
+        Basic Usage:
+            >>> from robo_orchard_lab.logging import basic_config
+            >>> import logging
+            >>>
+            >>> basic_config(level=logging.DEBUG)
+            >>> logger = logging.getLogger("example_logger")
+            >>> logger.info("This is an info message.")
+            # Output:
+            # Rank[1/4] 11/15/2024 10:00:00 INFO example_logger:15 This is
+            # an info message.
+
+        Custom Format:
+            >>> basic_config(
+            >>>     format="%(asctime)s - %rank - %(levelname)s - %(message)s",
+            >>>     level=logging.INFO,
+            >>>     datefmt="%Y-%m-%d %H:%M:%S"
+            >>> )
+            >>> logger = logging.getLogger("custom_logger")
+            >>> logger.warning("This is a warning message.")
+            # Output:
+            # 2024-11-15 10:01:00 - Rank[0/2] - WARNING - This is a
+            # warning message.
+
+        Non-Distributed Environment:
+            >>> basic_config()
+            >>> logger = logging.getLogger("single_logger")
+            >>> logger.debug("Debug message in single-node environment.")
+            # Output:
+            # Rank[0/0] 11/15/2024 10:02:00 DEBUG single_logger:15
+            # Debug message in single-node environment.
+    """
+    if "%rank" in format:
+        dist_info = get_dist_info()
+        format = format.replace(
+            "%rank", "Rank[{}/{}]".format(dist_info.rank, dist_info.world_size)
+        )
+
+    logging.basicConfig(format=format, datefmt=datefmt, **kwargs)

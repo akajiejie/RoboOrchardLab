@@ -1,0 +1,377 @@
+# Project RoboOrchard
+#
+# Copyright (c) 2024 Horizon Robotics. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#       http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
+# implied. See the License for the specific language governing
+# permissions and limitations under the License.
+
+import datetime
+import logging
+import time
+from typing import Iterable, Optional
+
+from accelerate import Accelerator
+from accelerate.data_loader import DataLoaderShard
+
+from robo_orchard_lab.pipeline.hooks.mixin import HookArgs, HookMixin
+
+__all__ = ["StatsMonitor"]
+
+
+logger = logging.getLogger(__file__)
+
+
+class StatsMonitor(HookMixin):
+    """A hook to monitor and log training statistics.
+
+    Including training speed, estimated time remaining, learning rate.
+    """
+
+    def __init__(
+        self,
+        batch_size: Optional[int] = None,
+        steps_per_epoch: Optional[int] = None,
+        step_log_freq: int = 512,
+        epoch_log_freq: int = 1,
+    ):
+        """Initializes the StatsMonitor hook.
+
+        Args:
+            batch_size (Optional[int]): The batch size per process. If None,
+                it attempts to be inferred from the dataloader.
+            steps_per_epoch (Optional[int]): The number of steps per epoch.
+                If None, it attemps to be inferred from the dataloader.
+            step_log_freq (int): Frequency to log stats at the step level.
+                Logs are output every `step_log_freq` steps.
+            epoch_log_freq (int): Frequency to log stats at the epoch level.
+                Logs are output every `epoch_log_freq` epochs.
+        """
+        self.batch_size = batch_size
+        self.steps_per_epoch = steps_per_epoch
+
+        self.step_log_freq = step_log_freq
+        self.epoch_log_freq = epoch_log_freq
+
+        self._data_stats_estimated = False
+        self.total_batch_size = None
+
+        self._start_time = None
+
+        # statistics for step callback
+        self._last_step_id = 0
+        self._step_start_time = None
+
+        # statistics for epoch callback
+        self._epoch_start_time = None
+        self._last_epoch_id = 0
+        self._epoch_start_step_id = 0
+
+    def _estimate_data_stats(
+        self,
+        accelerator: Accelerator,
+        dataloader: Iterable | None,
+    ) -> None:
+        """Estimates data-related statistics needed for monitoring.
+
+        This method infers essential data statistics such as the batch size per
+        process, total batch size across all processes, and the number of steps
+        per epoch. These statistics are crucial for accurate logging of
+        training speed and estimating the remaining training time.
+
+        Args:
+            accelerator (Accelerator): The `Accelerator` instance managing
+                distributed training and hardware acceleration.
+            dataloader (Iterable | None): The data loader used
+                in the training loop.
+
+        Raises:
+            ValueError: If the batch size cannot be inferred from the
+                dataloader and was not provided during initialization.
+
+        Notes:
+            - **Batch Size per Process**:
+                - If `self.batch_size` is not provided during initialization,
+                it attempts to infer it from `dataloader.batch_size`.
+                - Raises a `ValueError` if the batch size cannot be inferred.
+            - **Total Batch Size**:
+                - Calculated as `self.batch_size * accelerator.num_processes`.
+                - Represents the total number of samples processed in parallel
+                across all devices.
+            - **Steps per Epoch**:
+                - If `self.steps_per_epoch` is not provided, it attempts to
+                infer it from `len(dataloader)` if the dataloader is a
+                finite iterable.
+                - If the dataloader does not have a length (e.g., it is an
+                infinite iterator), `steps_per_epoch` remains `None`, and
+                epoch-based estimations might not be possible.
+        """
+        if self._data_stats_estimated:
+            return
+
+        if self.batch_size is not None:
+            self.total_batch_size = self.batch_size * accelerator.num_processes
+        else:
+            if isinstance(dataloader, DataLoaderShard):
+                self.total_batch_size = dataloader.total_batch_size
+                self.batch_size = int(
+                    dataloader.total_batch_size / accelerator.num_processes
+                )
+            elif hasattr(dataloader, "batch_size"):
+                self.batch_size = dataloader.batch_size  # type: ignore
+                self.total_batch_size = (
+                    self.batch_size * accelerator.num_processes
+                )
+
+        if self.batch_size is None:
+            raise ValueError(
+                "cannot estimate batch_size from dataloader, please provide it"
+            )
+
+        if self.steps_per_epoch is None:
+            if hasattr(dataloader, "__len__"):
+                self.steps_per_epoch = len(dataloader)  # type: ignore
+            else:
+                if accelerator.is_main_process:
+                    logger.warning(
+                        "Cannot estimate 'steps_per_epoch' before the first "
+                        "epoch is completed when 'max_epoch' is specified. "
+                        "As a result, the estimation of remaining training "
+                        "time will not be possible until after the first "
+                        "epoch. Please ensure that 'steps_per_epoch' is "
+                        "provided or the dataloader implements '__len__'."
+                    )
+
+        self._data_stats_estimated = True
+
+    def _estimate_remaining_time(
+        self,
+        elapsed_time: float,
+        current_step: int,
+        current_epoch: int,
+        start_step: int,
+        start_epoch: int,
+        max_step: Optional[int],
+        max_epoch: Optional[int],
+        steps_per_epoch: Optional[int],
+    ) -> Optional[float]:
+        """Estimates the remaining time based on average step time.
+
+        Args:
+            elapsed_time (float): The total elapsed time since
+                training started.
+            current_step (int): The current global step in the
+                training loop.
+            current_epoch (int): The current epoch in the training loop.
+            start_step (int): The starting global step in the training loop.
+            start_epoch (int): The starting epoch in the training loop.
+            max_step (Optional[int]): The maximum number of global
+                steps in the training loop.
+            max_epoch (Optional[int]): The maximum number of epochs
+                in the training loop.
+            steps_per_epoch (Optional[int]): The number of steps per
+                epoch, if known.
+
+        Returns:
+            Optional[float]: Estimated remaining time in seconds, or None
+            if estimation isn't possible.
+
+        Raises:
+            ValueError: If both `max_step` and `max_epoch` are None.
+        """
+        if max_step is None and max_epoch is None:
+            raise ValueError(
+                "At least one of `max_step` or `max_epoch` must be specified."
+            )
+
+        # Cannot estimate without steps_per_epoch if using max_epoch
+        if max_epoch is not None and steps_per_epoch is None:
+            return None
+
+        total_steps = (
+            float("inf") if max_step is None else max_step - start_step
+        )
+
+        if max_epoch is not None:
+            total_steps = min(
+                steps_per_epoch * (max_epoch - start_epoch) - start_step,  # type: ignore
+                total_steps,
+            )
+
+        # Calculate elapsed and remaining steps
+        elapsed_steps = current_step - start_step + 1
+        remain_steps = total_steps - current_step - 1
+        avg_step_time = elapsed_time / elapsed_steps
+        estimated_time = remain_steps * avg_step_time
+
+        return estimated_time
+
+    def on_loop_begin(self, args: HookArgs) -> None:
+        """Initializes timing and total batch size at the start of training.
+
+        Args:
+            args (HookArgs): Hook arguments including accelerator
+            and dataloader.
+        """
+        current_time = time.time()
+        self._start_time = current_time
+        self._estimate_data_stats(args.accelerator, args.dataloader)
+
+    def on_step_begin(self, args: HookArgs) -> None:
+        self._step_start_time = time.time()
+        self._last_step_id = args.global_step_id
+
+    def on_step_end(self, args: HookArgs) -> None:
+        """Callback when step ends.
+
+        Logs the training speed and estimated remaining time at the end of
+        each step.
+
+        Args:
+            args (HookArgs): Hook arguments including current step and epoch
+            information.
+        """
+        assert self._start_time is not None, (
+            "Please call `on_loop_begin` first."
+        )
+        assert (
+            self._step_start_time is not None
+            and self.total_batch_size is not None
+        ), "Please call `on_step_begin` first."
+
+        # only log in the main process
+        if not args.accelerator.is_main_process:
+            return
+
+        if (
+            self.step_log_freq > 0
+            and (args.global_step_id + 1) % self.step_log_freq == 0
+        ):
+            elapsed_steps = args.global_step_id + 1 - self._last_step_id
+            self._last_step_id = args.global_step_id
+
+            avg_elapsed_step_time = (
+                time.time() - self._step_start_time
+            ) / elapsed_steps
+            self._step_start_time = time.time()
+
+            speed = self.total_batch_size / avg_elapsed_step_time
+            elapsed_time = time.time() - self._start_time
+
+            remaining_time = self._estimate_remaining_time(
+                elapsed_time=elapsed_time,
+                current_step=args.global_step_id,
+                current_epoch=args.epoch_id,
+                start_step=args.start_step,
+                start_epoch=args.start_epoch,
+                max_step=args.max_step,
+                max_epoch=args.max_epoch,
+                steps_per_epoch=self.steps_per_epoch,
+            )
+
+            if remaining_time is not None:
+                remaining_time_str = str(
+                    datetime.timedelta(seconds=int(remaining_time))
+                )
+            else:
+                remaining_time_str = "N/A"
+
+            msg = f"Epoch[{args.epoch_id}] Step[{args.step_id}] GlobalStep[{args.global_step_id}] "  # noqa: E501
+            msg += f"Training Speed: {speed:.2f} samples/sec across all devices.\t"  # noqa: E501
+            msg += f"Average Step Time: {avg_elapsed_step_time:.2f} sec.\t"
+            msg += f"Estimated Remaining Time: {remaining_time_str}.\t"
+
+            if args.optimizer is not None:
+                msg += "Learning Rate: {:.5e}.\t".format(
+                    args.optimizer.param_groups[-1]["lr"]
+                )
+
+            logger.info(msg)
+
+    def on_epoch_begin(self, args: HookArgs) -> None:
+        self._epoch_start_time = time.time()
+        self._last_epoch_id = args.epoch_id
+        self._epoch_start_step_id = args.global_step_id
+
+    def on_epoch_end(self, args: HookArgs) -> None:
+        """Logs the average epoch time and resets the epoch start time.
+
+        Args:
+            args (HookArgs): Hook arguments including current epoch
+            information.
+        """
+        assert self._start_time is not None, (
+            "Please call `on_loop_begin` first."
+        )
+        assert (
+            self._epoch_start_time is not None
+            and self.total_batch_size is not None
+        ), "Please call `on_epoch_begin` first."
+
+        # only log in the main process
+        if not args.accelerator.is_main_process:
+            return
+
+        # estimate steps_per_epoch from last epoch
+        if self.steps_per_epoch is None:
+            self.steps_per_epoch = args.start_step + args.step_id + 1
+
+        if (
+            self.epoch_log_freq > 0
+            and (args.epoch_id + 1) % self.epoch_log_freq == 0
+        ):
+            elapsed_time = time.time() - self._epoch_start_time
+            self._epoch_start_time = time.time()
+
+            elapsed_epoches = args.epoch_id - self._last_epoch_id + 1
+            self._last_epoch_id = args.epoch_id
+
+            total_steps = args.global_step_id - self._epoch_start_step_id
+
+            self._epoch_start_step_id = args.global_step_id
+
+            avg_elapsed_epoches_time = elapsed_time / elapsed_epoches
+            avg_elapsed_step_time = elapsed_time / total_steps
+
+            speed = self.total_batch_size / avg_elapsed_step_time
+
+            remaining_time = self._estimate_remaining_time(
+                elapsed_time=time.time() - self._start_time,
+                # note that global_step_id is already upgrade after each step,
+                # so we have to minus 1 to keep it align with on_step_end
+                current_step=args.global_step_id - 1,
+                current_epoch=args.epoch_id,
+                start_step=args.start_step,
+                start_epoch=args.start_epoch,
+                max_step=args.max_step,
+                max_epoch=args.max_epoch,
+                steps_per_epoch=self.steps_per_epoch,
+            )
+
+            if remaining_time is not None:
+                remaining_time_str = str(
+                    datetime.timedelta(seconds=int(remaining_time))
+                )
+            else:
+                remaining_time_str = "N/A"
+
+            msg = f"Epoch[{args.epoch_id}] completed. "
+            msg += f"Training Speed: {speed:.2f} samples/sec across all devices.\t"  # noqa: E501
+            msg += f"Epoch Time: {elapsed_time:.2f} sec.\t"
+            msg += f"Average Epoch Time: {avg_elapsed_epoches_time:.2f} sec.\t"
+            msg += f"Average Step Time: {avg_elapsed_step_time:.2f} sec.\t"
+            msg += f"Estimated Remaining Time: {remaining_time_str}.\t"
+            if args.optimizer is not None:
+                msg += "Learning Rate: {:.5e}.\t".format(
+                    args.optimizer.param_groups[-1]["lr"]
+                )
+
+            logger.info(msg)
