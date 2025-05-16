@@ -19,7 +19,11 @@ from typing import Optional
 
 from accelerate import Accelerator
 
-from robo_orchard_lab.pipeline.hooks.mixin import HookArgs, HookMixin
+from robo_orchard_lab.pipeline.hooks.mixin import (
+    HookContextFromCallable,
+    PipelineHookArgs,
+    PipelineHooks,
+)
 
 __all__ = ["DoCheckpoint"]
 
@@ -27,7 +31,7 @@ __all__ = ["DoCheckpoint"]
 logger = logging.getLogger(__file__)
 
 
-class DoCheckpoint(HookMixin):
+class DoCheckpoint(PipelineHooks):
     """Checkpoint hook.
 
     A checkpointing hook for saving model state at specified epoch or
@@ -62,7 +66,7 @@ class DoCheckpoint(HookMixin):
             ValueError: If both save_epoch_freq and save_step_freq are None,
                 or if either is set to a value less than 1.
         """
-
+        super().__init__()
         if save_epoch_freq is None and save_step_freq is None:
             raise ValueError(
                 "Either `save_epoch_freq` or `save_step_freq` must be specified. Both cannot be None."  # noqa: E501
@@ -82,6 +86,15 @@ class DoCheckpoint(HookMixin):
         self.save_epoch_freq = save_epoch_freq
         self.save_step_freq = save_step_freq
         self._is_checked = False
+
+        self.register_hook(
+            channel="on_step",
+            hook=HookContextFromCallable(after=self._on_step_end),
+        )
+        self.register_hook(
+            channel="on_epoch",
+            hook=HookContextFromCallable(after=self._on_epoch_end),
+        )
 
     def _check(self, accelerator: Accelerator) -> None:
         if self._is_checked:
@@ -104,7 +117,7 @@ class DoCheckpoint(HookMixin):
             )
         self._is_checked = True
 
-    def on_step_end(self, args: HookArgs) -> None:
+    def _on_step_end(self, args: PipelineHookArgs) -> None:
         """Callback when step ends.
 
         Saves a checkpoint at the end of a step if `save_step_freq` conditions
@@ -132,7 +145,7 @@ class DoCheckpoint(HookMixin):
                 )
             )
 
-    def on_epoch_end(self, args: HookArgs) -> None:
+    def _on_epoch_end(self, args: PipelineHookArgs) -> None:
         """Callback when epoch ends.
 
         Saves a checkpoint at the end of an epoch if `save_epoch_freq`

@@ -33,7 +33,11 @@ from robo_orchard_lab.dataset.embodiedscan.metrics import DetMetric
 from robo_orchard_lab.pipeline import SimpleTrainer
 from robo_orchard_lab.pipeline.batch_processor import SimpleBatchProcessor
 from robo_orchard_lab.pipeline.hooks import DoCheckpoint, StatsMonitor
-from robo_orchard_lab.pipeline.hooks.mixin import HookMixin
+from robo_orchard_lab.pipeline.hooks.mixin import (
+    HookContextFromCallable,
+    PipelineHookArgs,
+    PipelineHooks,
+)
 from robo_orchard_lab.utils import log_basic_config
 
 logger = logging.getLogger(__file__)
@@ -49,15 +53,19 @@ class MyBatchProcessor(SimpleBatchProcessor):
         return output, loss
 
 
-class LossMovingAverageTracker(HookMixin):
+class LossMovingAverageTracker(PipelineHooks):
     def __init__(self, step_log_freq=25):
+        super().__init__()
         self.step_log_freq = step_log_freq
         self.reset()
+        self.register_hook(
+            "on_step", HookContextFromCallable(after=self._on_step_end)
+        )
 
     def reset(self):
         self.losses = {}
 
-    def on_step_end(self, args):
+    def _on_step_end(self, args: PipelineHookArgs):
         if not args.accelerator.is_main_process:
             return
 

@@ -7,8 +7,8 @@ NEED_FORMAT=${2:-false}
 set -e
 # if NEED_FORMAT is true, then format the code
 if [ "$NEED_FORMAT" = "true" ]; then
-    ruff check --fix --config=${ROOT_DIR}pyproject.toml ${ROOT_DIR}./
     ruff format --config=${ROOT_DIR}pyproject.toml ${ROOT_DIR}./
+    ruff check --fix --config=${ROOT_DIR}pyproject.toml ${ROOT_DIR}./
 # else check the code
 else
     ruff check --config=${ROOT_DIR}pyproject.toml ${ROOT_DIR}./

@@ -14,7 +14,6 @@
 # implied. See the License for the specific language governing
 # permissions and limitations under the License.
 
-from unittest.mock import MagicMock
 
 import pytest
 import torch
@@ -25,6 +24,66 @@ from torchmetrics import Metric
 
 from robo_orchard_lab.pipeline import SimpleTrainer
 from robo_orchard_lab.pipeline.batch_processor import SimpleBatchProcessor
+from robo_orchard_lab.pipeline.hooks.mixin import (
+    HookContextFromCallable,
+    PipelineHookArgs,
+    PipelineHooks,
+)
+
+
+class DummyPipelineHook(PipelineHooks):
+    def __init__(self):
+        super().__init__()
+
+        self._on_loop_begin_cnt = 0
+        self._on_loop_end_cnt = 0
+        self._on_epoch_begin_cnt = 0
+        self._on_epoch_end_cnt = 0
+        self._on_step_begin_cnt = 0
+        self._on_step_end_cnt = 0
+
+        self.register_hook(
+            "on_loop",
+            HookContextFromCallable(
+                before=self.on_loop_begin, after=self.on_loop_end
+            ),
+        )
+        self.register_hook(
+            "on_epoch",
+            HookContextFromCallable(
+                before=self.on_epoch_begin, after=self.on_epoch_end
+            ),
+        )
+        self.register_hook(
+            "on_step",
+            HookContextFromCallable(
+                before=self.on_step_begin, after=self.on_step_end
+            ),
+        )
+
+    def on_loop_begin(self, args: PipelineHookArgs):
+        self._on_loop_begin_cnt += 1
+        print("Loop begin")
+
+    def on_loop_end(self, args: PipelineHookArgs):
+        self._on_loop_end_cnt += 1
+        print("Loop end")
+
+    def on_epoch_begin(self, args: PipelineHookArgs):
+        self._on_epoch_begin_cnt += 1
+        print("Epoch begin")
+
+    def on_epoch_end(self, args: PipelineHookArgs):
+        self._on_epoch_end_cnt += 1
+        print("Epoch end")
+
+    def on_step_begin(self, args: PipelineHookArgs):
+        self._on_step_begin_cnt += 1
+        print("Step begin")
+
+    def on_step_end(self, args: PipelineHookArgs):
+        self._on_step_end_cnt += 1
+        print("Step end")
 
 
 class DummyMetric(Metric):
@@ -90,30 +149,25 @@ def test_trainer_initialization(dummy_trainer):
     assert dummy_trainer.lr_scheduler_step_at == "step"
 
 
-def test_training_loop(dummy_trainer):
+def test_training_loop(dummy_trainer: SimpleTrainer):
     """Test training loop execution."""
     # Spy on hook methods
-    dummy_trainer.on_loop_begin = MagicMock()
-    dummy_trainer.on_epoch_begin = MagicMock()
-    dummy_trainer.on_step_begin = MagicMock()
-    dummy_trainer.on_step_end = MagicMock()
-    dummy_trainer.on_epoch_end = MagicMock()
-    dummy_trainer.on_loop_end = MagicMock()
+    hook = DummyPipelineHook()
+
+    dummy_trainer.hooks = hook
 
     # Run the training loop
     dummy_trainer()
 
+    assert dummy_trainer.dataloader is not None
+
     # Verify that hooks were called the expected number of times
-    assert dummy_trainer.on_loop_begin.call_count == 1
-    assert dummy_trainer.on_epoch_begin.call_count == 1
-    assert dummy_trainer.on_step_begin.call_count == len(
-        dummy_trainer.dataloader
-    )
-    assert dummy_trainer.on_step_end.call_count == len(
-        dummy_trainer.dataloader
-    )
-    assert dummy_trainer.on_epoch_end.call_count == 1
-    assert dummy_trainer.on_loop_end.call_count == 1
+    assert hook._on_loop_begin_cnt == 1
+    assert hook._on_epoch_begin_cnt == 1
+    assert hook._on_step_begin_cnt == len(dummy_trainer.dataloader)
+    assert hook._on_step_end_cnt == len(dummy_trainer.dataloader)
+    assert hook._on_epoch_end_cnt == 1
+    assert hook._on_loop_end_cnt == 1
 
 
 def test_optimizer_and_scheduler(dummy_trainer):

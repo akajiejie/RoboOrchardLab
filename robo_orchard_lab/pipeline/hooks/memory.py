@@ -18,12 +18,16 @@ from typing import Literal
 
 import torch
 
-from robo_orchard_lab.pipeline.hooks.mixin import HookArgs, HookMixin
+from robo_orchard_lab.pipeline.hooks.mixin import (
+    HookContextFromCallable,
+    PipelineHookArgs,
+    PipelineHooks,
+)
 
 __all__ = ["CUDAMemoryManager"]
 
 
-class CUDAMemoryManager(HookMixin):
+class CUDAMemoryManager(PipelineHooks):
     """A CUDA memory manager to periodically release cached GPU memory.
 
     This class is designed to work with training pipelines that use hooks
@@ -57,15 +61,18 @@ class CUDAMemoryManager(HookMixin):
 
     Examples:
         Basic Usage:
-            >>> from robo_orchard_lab.pipeline.hooks.mixin import HookArgs
+            >>> from robo_orchard_lab.pipeline.hooks.mixin import (
+            ...     PipelineHookArgs,
+            ... )
             >>> from robo_orchard_lab.pipeline.memory import CUDAMemoryManager
             >>>
             >>> memory_manager = CUDAMemoryManager(
             >>>     empty_cache_at="step", empty_cache_freq=10
             >>> )
             >>> # Simulate a training step
-            >>> hook_args = HookArgs(global_step_id=9, epoch_id=0)
-            >>> memory_manager.on_step_end(hook_args)
+            >>> hook_args = PipelineHookArgs(global_step_id=9, epoch_id=0)
+            >>> with memory_manager.begin("on_step", hook_args) as hook_args:
+            >>>     ... # Simulate the end of a step
             # Clears the cache after 10 steps
 
         Epoch-Based Clearing:
@@ -73,8 +80,9 @@ class CUDAMemoryManager(HookMixin):
             >>>     empty_cache_at="epoch", empty_cache_freq=2
             >>> )
             >>> # Simulate the end of an epoch
-            >>> hook_args = HookArgs(global_step_id=99, epoch_id=1)
-            >>> memory_manager.on_epoch_end(hook_args)
+            >>> hook_args = PipelineHookArgs(global_step_id=99, epoch_id=1)
+            >>> with memory_manager.begin("on_epoch", hook_args) as hook_args:
+            >>>     ... # Simulate the end of an epoch
             # Clears the cache after every 2 epochs
     """
 
@@ -93,26 +101,27 @@ class CUDAMemoryManager(HookMixin):
                 The frequency of cache clearing based on the specified
                 granularity. Default is 1 (clear every step or epoch).
         """
+        super().__init__()
         self.empty_cache_at = empty_cache_at
         self.empty_cache_freq = empty_cache_freq
 
-    def on_step_end(self, arg: HookArgs) -> None:
+        self.register_hook(
+            "on_step", hook=HookContextFromCallable(after=self._on_step_end)
+        )
+        self.register_hook(
+            "on_epoch", hook=HookContextFromCallable(after=self._on_epoch_end)
+        )
+
+    def _on_step_end(self, arg: PipelineHookArgs) -> None:
         """Hook invoked at the end of a training step.
 
         Clears the CUDA cache if `empty_cache_at` is set to "step" and the
         current step satisfies the clearing frequency (`empty_cache_freq`).
 
         Args:
-            arg (HookArgs): Arguments passed by the pipeline, including
+            arg (PipelineHookArgs): Arguments passed by the pipeline, including
             `global_step_id`.
 
-        Examples:
-            >>> memory_manager = CUDAMemoryManager(
-            >>>     empty_cache_at="step", empty_cache_freq=5
-            >>> )
-            >>> hook_args = HookArgs(global_step_id=4, epoch_id=0)
-            >>> memory_manager.on_step_end(hook_args)
-            # Clears cache after 5 steps
         """
         if (
             self.empty_cache_at == "step"
@@ -121,23 +130,16 @@ class CUDAMemoryManager(HookMixin):
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()
 
-    def on_epoch_end(self, arg: HookArgs) -> None:
+    def _on_epoch_end(self, arg: PipelineHookArgs) -> None:
         """Hook invoked at the end of a training epoch.
 
         Clears the CUDA cache if `empty_cache_at` is set to "epoch" and the
         current epoch satisfies the clearing frequency (`empty_cache_freq`).
 
         Args:
-            arg (HookArgs): Arguments passed by the pipeline,
+            arg (PipelineHookArgs): Arguments passed by the pipeline,
             including `epoch_id`.
 
-        Examples:
-            >>> memory_manager = CUDAMemoryManager(
-            >>>     empty_cache_at="epoch", empty_cache_freq=2
-            >>> )
-            >>> hook_args = HookArgs(global_step_id=99, epoch_id=1)
-            >>> memory_manager.on_epoch_end(hook_args)
-            # Clears cache after every 2 epochs
         """
         if (
             self.empty_cache_at == "epoch"

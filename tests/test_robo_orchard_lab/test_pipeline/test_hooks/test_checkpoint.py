@@ -20,7 +20,7 @@ import pytest
 from accelerate import Accelerator
 
 from robo_orchard_lab.pipeline.hooks.checkpoint import DoCheckpoint
-from robo_orchard_lab.pipeline.hooks.mixin import HookArgs
+from robo_orchard_lab.pipeline.hooks.mixin import PipelineHookArgs
 
 
 @pytest.fixture(scope="function")
@@ -74,14 +74,16 @@ def test_on_step_end(mocker, mock_accelerator):
 
     hook = DoCheckpoint(save_root="checkpoints", save_step_freq=2)
 
-    args = HookArgs(
+    args = PipelineHookArgs(
         accelerator=mock_accelerator,
         global_step_id=1,  # This step should trigger a checkpoint save
         epoch_id=0,
         step_id=0,
     )
 
-    hook.on_step_end(args)
+    with hook.begin("on_step", args):
+        pass
+
     mock_accelerator.save_state.assert_called_once_with("checkpoints")
     mock_logger.info.assert_called_once_with(
         "Save checkpoint at the end of step 1 to mock_checkpoint_path"
@@ -96,14 +98,15 @@ def test_on_epoch_end(mocker, mock_accelerator):
 
     hook = DoCheckpoint(save_root="checkpoints", save_epoch_freq=2)
 
-    args = HookArgs(
+    args = PipelineHookArgs(
         accelerator=mock_accelerator,
         global_step_id=0,
         epoch_id=1,  # This epoch should trigger a checkpoint save
         step_id=0,
     )
 
-    hook.on_epoch_end(args)
+    with hook.begin("on_epoch", args):
+        pass
     mock_accelerator.save_state.assert_called_once_with("checkpoints")
     mock_logger.info.assert_called_once_with(
         "Save checkpoint at the end of epoch 1 to mock_checkpoint_path"
@@ -121,14 +124,15 @@ def test_skip_checkpoint_on_step(mocker, mock_accelerator):
 
     hook = DoCheckpoint(save_root="checkpoints", save_step_freq=5)
 
-    args = HookArgs(
+    args = PipelineHookArgs(
         accelerator=mock_accelerator,
         global_step_id=3,  # This step should not trigger a checkpoint save
         epoch_id=0,
         step_id=0,
     )
 
-    hook.on_step_end(args)
+    with hook.begin("on_step", args):
+        pass
     mock_accelerator.save_state.assert_not_called()
     mock_logger.info.assert_not_called()
 
@@ -144,14 +148,15 @@ def test_skip_checkpoint_on_epoch(mocker, mock_accelerator):
 
     hook = DoCheckpoint(save_root="checkpoints", save_epoch_freq=3)
 
-    args = HookArgs(
+    args = PipelineHookArgs(
         accelerator=mock_accelerator,
         global_step_id=0,
         epoch_id=1,  # This epoch should not trigger a checkpoint save
         step_id=0,
     )
 
-    hook.on_epoch_end(args)
+    with hook.begin("on_epoch", args):
+        pass
     mock_accelerator.save_state.assert_not_called()
     mock_logger.info.assert_not_called()
 

@@ -20,7 +20,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from robo_orchard_lab.pipeline.hooks import StatsMonitor
-from robo_orchard_lab.pipeline.hooks.mixin import HookArgs
+from robo_orchard_lab.pipeline.hooks.mixin import PipelineHookArgs
 
 
 @pytest.fixture(scope="function")
@@ -44,7 +44,7 @@ def mock_dataloader():
 @pytest.fixture(scope="function")
 def mock_hook_args(mock_accelerator, mock_dataloader):
     """Fixture to create mock HookArgs."""
-    return HookArgs(
+    return PipelineHookArgs(
         accelerator=mock_accelerator,
         dataloader=mock_dataloader,
         epoch_id=0,
@@ -117,11 +117,14 @@ def test_on_step_end(mocker, mock_hook_args):
     )  # Simulate 0.5 seconds per step
 
     mock_hook_args.global_step_id = 10  # Step 10 not reached
-    monitor.on_step_end(mock_hook_args)
+
+    with monitor.begin("on_step", mock_hook_args):
+        pass
     mock_logger.info.assert_not_called()
 
     mock_hook_args.global_step_id = 9
-    monitor.on_step_end(mock_hook_args)
+    with monitor.begin("on_step", mock_hook_args):
+        pass
     mock_logger.info.assert_called_once()
 
 
@@ -132,12 +135,15 @@ def test_on_epoch_end(mocker, mock_hook_args):
     monitor = StatsMonitor(
         batch_size=32, steps_per_epoch=100, epoch_log_freq=1
     )
-    monitor._start_time = time.time() - 300  # Simulate 5 minutes elapsed
-    monitor.total_batch_size = 32 * 4
-    monitor._epoch_start_time = time.time() - 60  # Simulate 1-minute epoch
 
-    mock_hook_args.epoch_id = 0
-    mock_hook_args.global_step_id = 10
-    monitor.on_epoch_end(mock_hook_args)
+    with monitor.begin("on_epoch", mock_hook_args) as monitor_hook_args:
+        monitor._start_time = time.time() - 300  # Simulate 5 minutes elapsed
+        monitor.total_batch_size = 32 * 4
+        monitor._epoch_start_time = time.time() - 60  # Simulate 1-minute epoch
+
+        monitor_hook_args.epoch_id = 0
+        monitor_hook_args.global_step_id = 10
+
+        pass
 
     mock_logger.info.assert_called_once()

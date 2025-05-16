@@ -11,6 +11,7 @@ dependencies = [
     "numpy",
     "accelerate",
     "tqdm",
+    "deprecated",
     # metric
     "torchmetrics>=1.6",
     # robo orchard
@@ -30,9 +31,7 @@ bip3d = [
     "terminaltables",
     "pytorch3d @ git+https://github.com/facebookresearch/pytorch3d.git@stable",
 ]
-all = [
-    "robo_orchard_lab[bip3d]"
-]
+all = ["robo_orchard_lab[bip3d]"]
 
 [project.urls]
 Homepage = "https://github.com/HorizonRobotics/robo_orchard_lab"
@@ -165,10 +164,5 @@ docstring-code-format = true
 enableExperimentalFeatures = false
 typeCheckingMode = "basic"
 reportRedeclaration = false
-include = [
-    "robo_orchard_lab",
-    "tests"
-]
-exclude = [
-    "robo_orchard_lab/distributed/__init__.py"
-]
+include = ["robo_orchard_lab", "tests"]
+exclude = ["robo_orchard_lab/distributed/__init__.py"]

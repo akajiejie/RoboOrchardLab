@@ -15,13 +15,11 @@
 # permissions and limitations under the License.
 
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Any, Callable
+from typing import Any, Callable
 
 from accelerate import Accelerator
 
-if TYPE_CHECKING:
-    from robo_orchard_lab.pipeline.mixin import PipelineMixin
-
+from robo_orchard_lab.pipeline.hooks.mixin import PipelineHooks
 
 __all__ = ["BatchProcessorMixin"]
 
@@ -32,7 +30,7 @@ class BatchProcessorMixin(ABC):
     @abstractmethod
     def __call__(
         self,
-        pipeline: "PipelineMixin",
+        pipeline_hooks: PipelineHooks,
         accelerator: Accelerator,
         batch: Any,
         model: Callable,
@@ -41,7 +39,7 @@ class BatchProcessorMixin(ABC):
         """Executes the batch processing pipeline.
 
         Args:
-            pipeline (PipelineMixin): The pipeline object managing hooks.
+            pipeline_hooks (PipelineHooks): The pipeline hooks.
             accelerator (Accelerator): An instance of `Accelerator`.
             batch (Any): Input batch data.
             model (Callable): The model function or callable.

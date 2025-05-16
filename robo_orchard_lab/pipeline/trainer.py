@@ -18,21 +18,18 @@ import logging
 import os
 from dataclasses import dataclass
 from inspect import signature
-from typing import (
-    Any,
-    Callable,
-    Dict,
-    Iterable,
-    List,
-    Optional,
-)
+from typing import Any, Callable, Dict, Iterable, List, Literal, Optional
 
 import requests
 import torch
 from accelerate import Accelerator
+from accelerate.scheduler import AcceleratedScheduler
+from torch.utils.data import DataLoader
 
-from robo_orchard_lab.pipeline.hooks.mixin import HookArgs
-from robo_orchard_lab.pipeline.mixin import PipelineMixin
+from robo_orchard_lab.pipeline.hooks.mixin import (
+    PipelineHookArgs,
+    PipelineHooks,
+)
 
 __all__ = ["SimpleTrainer"]
 
@@ -95,7 +92,7 @@ class TrainerState:
         self.step = 0
 
 
-class SimpleTrainer(PipelineMixin):
+class SimpleTrainer:
     """A base trainer class that extends SimpleTrainer for training models.
 
     This trainer integrates with the `Accelerate` library for distributed
@@ -108,7 +105,7 @@ class SimpleTrainer(PipelineMixin):
             distributed training.
         batch_processor (Optional[BatchProcessorMixin]): A processor that
             defines how to handle each batch during training.
-        dataloader (Optional[Iterable]): The data loader for feeding batches
+        dataloader (Optional[DataLoader]): The data loader for feeding batches
             to the model.
         optimizer (Optional[torch.optim.Optimizer]): The optimizer used
             for training.
@@ -118,7 +115,7 @@ class SimpleTrainer(PipelineMixin):
             steps at "epoch" or "step".
         max_step (Optional[int]): The maximum number of steps to train.
         max_epoch (Optional[int]): The maximum number of epochs to train.
-        val_dataloader (Optional[Iterable]): The data loader for validation.
+        val_dataloader (Optional[DataLoader]): The data loader for validation.
         metric (Optional[Any]): The metric used for evaluation, with update,
             compute and reset functions.
         step_eval_freq (Optional[int]): The frequency of evaluation in
@@ -144,13 +141,13 @@ class SimpleTrainer(PipelineMixin):
         model: torch.nn.Module,
         accelerator: Accelerator,
         batch_processor: Optional[Callable] = None,
-        dataloader: Optional[Iterable] = None,
+        dataloader: Optional[DataLoader | Iterable] = None,
         optimizer: Optional[torch.optim.Optimizer] = None,
         lr_scheduler: Optional[torch.optim.lr_scheduler.LRScheduler] = None,
-        lr_scheduler_step_at: str = "step",
+        lr_scheduler_step_at: Literal["step", "epoch"] = "step",
         max_step: Optional[int] = None,
         max_epoch: Optional[int] = None,
-        val_dataloader: Optional[Iterable] = None,
+        val_dataloader: Optional[DataLoader | Iterable] = None,
         metric: Any = None,
         step_eval_freq: Optional[int] = None,
         epoch_eval_freq: Optional[int] = None,
@@ -160,9 +157,9 @@ class SimpleTrainer(PipelineMixin):
         grad_clip_value: Optional[float] = None,
         grad_max_norm: Optional[float] = None,
         grad_norm_type: int = 2,
-        **kwargs,
+        hooks: PipelineHooks | Iterable[PipelineHooks] | None = None,
     ):
-        super().__init__(**kwargs)
+        self.hooks = PipelineHooks.from_hooks(hooks)
         self.batch_processor = batch_processor
         self.lr_scheduler_step_at = lr_scheduler_step_at
         self.max_step = max_step
@@ -179,23 +176,29 @@ class SimpleTrainer(PipelineMixin):
         self.grad_norm_type = grad_norm_type
 
         self.accelerator = accelerator
-        self.model = accelerator.prepare(model)
+        self.model: torch.nn.Module = accelerator.prepare(model)
 
         self.trainer_state = TrainerState()
         accelerator.register_for_checkpointing(self.trainer_state)
 
         if dataloader is not None:
-            self.dataloader = accelerator.prepare(dataloader)
+            self.dataloader: Optional[DataLoader] = accelerator.prepare(
+                dataloader
+            )
         else:
             self.dataloader = None
 
         if optimizer is not None:
-            self.optimizer = accelerator.prepare(optimizer)
+            self.optimizer: Optional[torch.optim.Optimizer] = (
+                accelerator.prepare(optimizer)
+            )
         else:
             self.optimizer = None
 
         if lr_scheduler is not None:
-            self.lr_scheduler = accelerator.prepare(lr_scheduler)
+            self.lr_scheduler: Optional[AcceleratedScheduler] = (
+                accelerator.prepare(lr_scheduler)
+            )
         else:
             self.lr_scheduler = None
 
@@ -251,7 +254,7 @@ class SimpleTrainer(PipelineMixin):
         else:
             raise ValueError(f"resume data is not available: {resume_from}")
 
-    def _get_hook_args(self, **kwargs) -> HookArgs:
+    def _get_hook_args(self, **kwargs) -> PipelineHookArgs:
         """Get Hook args.
 
         Creates and returns a HookArgs object with current training state
@@ -261,10 +264,10 @@ class SimpleTrainer(PipelineMixin):
             **kwargs: Additional arguments to include in the HookArgs object.
 
         Returns:
-            HookArgs: An object containing the current training state and
-                additional arguments.
+            PipelineHookArgs: An object containing the current training state
+                and additional arguments.
         """
-        hookargs = HookArgs(
+        hookargs = PipelineHookArgs(
             accelerator=self.accelerator,
             max_step=self.max_step,
             max_epoch=self.max_epoch,
@@ -294,23 +297,22 @@ class SimpleTrainer(PipelineMixin):
         )
         if self.accelerator.is_main_process:
             logger.info("\n" + "=" * 50 + "BEGIN TRAINING" + "=" * 50)
+
         end_loop_flag = False
-
-        self.on_loop_begin(self._get_hook_args())
-
         self.model.train()
-        while not end_loop_flag:
-            if hasattr(self.dataloader, "set_epoch"):
-                self.dataloader.set_epoch(self.trainer_state.epoch)
 
-            self.on_epoch_begin(self._get_hook_args())
-
-            for batch in self.dataloader:
-                self.on_step_begin(self._get_hook_args())
-                self.optimizer.zero_grad()
-
-                model_outputs = self.batch_processor(
-                    pipeline=self,
+        def step(
+            batch: Any,
+            batch_processor: Callable,
+            optimizer: torch.optim.Optimizer,
+            lr_scheduler: Optional[AcceleratedScheduler],
+        ):
+            with self.hooks.begin(
+                "on_step", self._get_hook_args()
+            ) as on_step_hook_args:
+                optimizer.zero_grad()
+                model_outputs = batch_processor(
+                    pipeline_hooks=self.hooks,
                     accelerator=self.accelerator,
                     batch=batch,
                     model=self.model,
@@ -320,68 +322,75 @@ class SimpleTrainer(PipelineMixin):
                     step_id=self.trainer_state.step,
                     global_step_id=self.trainer_state.global_step,
                     dataloader=self.dataloader,
-                    optimizer=self.optimizer,
-                    lr_scheduler=self.lr_scheduler,
+                    optimizer=optimizer,
+                    lr_scheduler=lr_scheduler,
                 )
-
                 self._clip_grad()
-                self.optimizer.step()
+                optimizer.step()
                 if (
                     self.lr_scheduler_step_at == "step"
-                    and self.lr_scheduler is not None
+                    and lr_scheduler is not None
                 ):
-                    self.lr_scheduler.scheduler.step()
-
+                    lr_scheduler.scheduler.step()
+                # evaluate when step matches step_eval_freq
                 if (
                     self.step_eval_freq is not None
                     and (self.trainer_state.global_step + 1)
                     % self.step_eval_freq
                     == 0
                 ):
-                    metric = self.eval()
-                else:
-                    metric = None
+                    self.eval()
+                # update module_output to be used by step hook
+                on_step_hook_args.model_outputs = model_outputs
 
-                self.on_step_end(
-                    self._get_hook_args(
-                        model_outputs=model_outputs,
-                        metric=metric,
-                    )
-                )
+        with self.hooks.begin("on_loop", self._get_hook_args()):
+            while not end_loop_flag:
+                # TODO: Synchronize end_loop_flag when different
+                # processes have different batch numbers. !
+                #
+                # In some cases, the dataloader may not have the same
+                # number of batches when dataset is split into
+                # different processes.
+                #
+                # If the dataloader has a different number of batches,
+                # the training loop may hang or produce unexpected results.
 
-                self.trainer_state.update_step()
+                with self.hooks.begin("on_epoch", self._get_hook_args()):
+                    for batch in self.dataloader:
+                        step(
+                            batch=batch,
+                            batch_processor=self.batch_processor,
+                            optimizer=self.optimizer,
+                            lr_scheduler=self.lr_scheduler,
+                        )
+                        self.trainer_state.update_step()
+                        if (
+                            self.max_step is not None
+                            and self.trainer_state.global_step >= self.max_step
+                        ):
+                            end_loop_flag = True
+                            break
 
+                    if (
+                        self.lr_scheduler_step_at == "epoch"
+                        and self.lr_scheduler is not None
+                    ):
+                        self.lr_scheduler.scheduler.step()
+
+                    if (
+                        self.epoch_eval_freq is not None
+                        and (self.trainer_state.epoch + 1)
+                        % self.epoch_eval_freq
+                        == 0
+                    ):
+                        self.eval()
+
+                self.trainer_state.update_epoch()
                 if (
-                    self.max_step is not None
-                    and self.trainer_state.global_step >= self.max_step
+                    self.max_epoch is not None
+                    and self.trainer_state.epoch >= self.max_epoch
                 ):
                     end_loop_flag = True
-                    break
-
-            if (
-                self.lr_scheduler_step_at == "epoch"
-                and self.lr_scheduler is not None
-            ):
-                self.lr_scheduler.scheduler.step()
-
-            if (
-                self.epoch_eval_freq is not None
-                and (self.trainer_state.epoch + 1) % self.epoch_eval_freq == 0
-            ):
-                metric = self.eval()
-            else:
-                metric = None
-
-            self.on_epoch_end(self._get_hook_args(metric=metric))
-            self.trainer_state.update_epoch()
-
-            if (
-                self.max_epoch is not None
-                and self.trainer_state.epoch >= self.max_epoch
-            ):
-                end_loop_flag = True
-
-        self.on_loop_end(self._get_hook_args())
 
     def _clip_grad(self) -> None:
         """Clips gradients based on the specified mode and values.

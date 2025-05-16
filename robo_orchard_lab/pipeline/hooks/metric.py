@@ -28,7 +28,11 @@ from typing import (
 
 from torchmetrics import Metric
 
-from robo_orchard_lab.pipeline.hooks.mixin import HookArgs, HookMixin
+from robo_orchard_lab.pipeline.hooks.mixin import (
+    HookContextFromCallable,
+    PipelineHookArgs,
+    PipelineHooks,
+)
 from robo_orchard_lab.utils import as_sequence
 
 __all__ = ["MetricEntry", "MetricTracker"]
@@ -75,7 +79,7 @@ class MetricEntry:
         return zip(self.names, values, strict=False)
 
 
-class MetricTracker(HookMixin):
+class MetricTracker(PipelineHooks):
     """A hook for updating and logging metrics.
 
     Attributes:
@@ -88,13 +92,6 @@ class MetricTracker(HookMixin):
         epoch_log_freq (int): Frequency of logging at the epoch level.
         log_main_process_only (int): Only logging in the main processor or not.
 
-    Methods:
-        on_loop_begin: Moves metrics to the correct device at the start of
-            the loop.
-        on_batch_end: Updates metrics at the end of each batch.
-        on_step_end: Logs and optionally resets metrics at the end of a step.
-        on_epoch_end: Logs and optionally resets metrics at the end of an
-            epoch.
 
     """
 
@@ -123,6 +120,7 @@ class MetricTracker(HookMixin):
             log_main_process_only (int, optional): Only logging in the main
                 processor or not. Defaults to True.
         """
+        super().__init__()
         self.metric_entrys = as_sequence(metric_entrys)
         self.metrics = [entry_i.metric for entry_i in self.metric_entrys]
         self.reset_by = reset_by
@@ -132,6 +130,23 @@ class MetricTracker(HookMixin):
         self.log_main_process_only = log_main_process_only
 
         self._reset()
+
+        self.register_hook(
+            channel="on_loop",
+            hook=HookContextFromCallable(before=self._on_loop_begin),
+        )
+        self.register_hook(
+            channel="on_batch",
+            hook=HookContextFromCallable(after=self._on_batch_end),
+        )
+        self.register_hook(
+            channel="on_step",
+            hook=HookContextFromCallable(after=self._on_step_end),
+        )
+        self.register_hook(
+            channel="on_epoch",
+            hook=HookContextFromCallable(after=self._on_epoch_end),
+        )
 
     @abstractmethod
     def update_metric(self, batch: Any, model_outputs: Any) -> None:
@@ -180,39 +195,39 @@ class MetricTracker(HookMixin):
             return
         logger.info(msg)
 
-    def on_loop_begin(self, args: HookArgs) -> None:
+    def _on_loop_begin(self, args: PipelineHookArgs) -> None:
         """Callback when loop begins.
 
         Prepares metrics for computation by moving them to the appropriate
         device.
 
         Args:
-            args (HookArgs): Arguments containing the accelerator with
+            args (PipelineHookArgs): Arguments containing the accelerator with
             device information.
         """
         for metric_i in self.metrics:
             metric_i.to(args.accelerator.device)
 
-    def on_batch_end(self, args: HookArgs) -> None:
+    def _on_batch_end(self, args: PipelineHookArgs) -> None:
         """Callback when batch ends.
 
         Updates metrics using the `metric_update_fn` at the end of each batch.
 
         Args:
-            args (HookArgs): Arguments containing the batch data and
+            args (PipelineHookArgs): Arguments containing the batch data and
             model outputs.
         """
         self.update_metric(args.batch, args.model_outputs)
 
-    def on_step_end(self, args: HookArgs) -> None:
+    def _on_step_end(self, args: PipelineHookArgs) -> None:
         """Callback when step ends.
 
         Logs metrics and optionally resets them at the end of a step based
         on `step_log_freq`.
 
         Args:
-            args (HookArgs): Arguments containing the current step and epoch
-            IDs.
+            args (PipelineHookArgs): Arguments containing the current step
+                and epoch IDs.
         """
 
         if (
@@ -232,14 +247,14 @@ class MetricTracker(HookMixin):
         ):
             self._reset()
 
-    def on_epoch_end(self, args: HookArgs) -> None:
+    def _on_epoch_end(self, args: PipelineHookArgs) -> None:
         """Callback when epoch ends.
 
         Logs metrics and optionally resets them at the end of an epoch
         based on `epoch_log_freq`.
 
         Args:
-            args (HookArgs): Arguments containing the current epoch ID.
+            args (PipelineHookArgs): Arguments containing the current epoch ID.
         """
 
         if (

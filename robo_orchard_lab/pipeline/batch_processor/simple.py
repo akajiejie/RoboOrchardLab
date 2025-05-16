@@ -17,7 +17,6 @@
 import logging
 from abc import abstractmethod
 from typing import (
-    TYPE_CHECKING,
     Any,
     Callable,
     Optional,
@@ -30,12 +29,11 @@ from accelerate import Accelerator
 from torchvision.transforms import Compose
 
 from robo_orchard_lab.pipeline.batch_processor.mixin import BatchProcessorMixin
-from robo_orchard_lab.pipeline.hooks.mixin import HookArgs
+from robo_orchard_lab.pipeline.hooks.mixin import (
+    PipelineHookArgs,
+    PipelineHooks,
+)
 from robo_orchard_lab.utils import as_sequence
-
-if TYPE_CHECKING:
-    from robo_orchard_lab.pipeline.mixin import PipelineMixin
-
 
 __all__ = ["SimpleBatchProcessor"]
 
@@ -93,8 +91,8 @@ class SimpleBatchProcessor(BatchProcessorMixin):
         model_outputs: Optional[Any] = None,
         reduce_loss: Optional[torch.Tensor] = None,
         **hook_kwargs,
-    ) -> HookArgs:
-        return HookArgs(
+    ) -> PipelineHookArgs:
+        return PipelineHookArgs(
             accelerator=accelerator,
             batch=batch,
             model_outputs=model_outputs,
@@ -154,7 +152,7 @@ class SimpleBatchProcessor(BatchProcessorMixin):
 
     def __call__(
         self,
-        pipeline: "PipelineMixin",
+        pipeline_hooks: PipelineHooks,
         accelerator: Accelerator,
         batch: Any,
         model: Callable,
@@ -163,7 +161,7 @@ class SimpleBatchProcessor(BatchProcessorMixin):
         """Executes the batch processing pipeline.
 
         Args:
-            pipeline (PipelineMixin): The pipeline object managing hooks.
+            pipeline_hooks (PipelineHooks): The pipeline object managing hooks.
             accelerator (Accelerator): An instance of `Accelerator`.
             batch (Any): Input batch data.
             model (Callable): The model function or callable.
@@ -172,68 +170,45 @@ class SimpleBatchProcessor(BatchProcessorMixin):
 
         self._initialize(accelerator=accelerator)
 
-        pipeline.on_batch_begin(
+        with pipeline_hooks.begin(
+            "on_batch",
             self._get_hook_args(
                 accelerator=accelerator, batch=batch, **hook_kwargs
-            )
-        )
+            ),
+        ) as on_batch_hook_args:
+            ts_batch = self.transform(batch)
 
-        ts_batch = self.transform(batch)
-
-        pipeline.on_forward_begin(
-            self._get_hook_args(
-                accelerator=accelerator, batch=ts_batch, **hook_kwargs
-            )
-        )
-
-        outputs, reduce_loss = self.do_forward(
-            model=model,
-            batch=ts_batch,
-            device=accelerator.device,
-        )
-
-        pipeline.on_forward_end(
-            self._get_hook_args(
-                accelerator=accelerator,
-                batch=ts_batch,
-                model_outputs=outputs,
-                reduce_loss=reduce_loss,
-            )
-        )
-
-        if self.need_backward:
-            if reduce_loss is None:
-                raise LossNotProvidedError()
-
-            pipeline.on_backward_begin(
-                self._get_hook_args(
-                    accelerator=accelerator,
+            with pipeline_hooks.begin(
+                "on_forward",
+                arg=self._get_hook_args(
+                    accelerator=accelerator, batch=ts_batch, **hook_kwargs
+                ),
+            ) as on_forward_hook_args:
+                outputs, reduce_loss = self.do_forward(
+                    model=model,
                     batch=ts_batch,
-                    model_outputs=outputs,
-                    reduce_loss=reduce_loss,
-                    **hook_kwargs,
+                    device=accelerator.device,
                 )
-            )
+                on_forward_hook_args.model_outputs = outputs
+                on_forward_hook_args.reduce_loss = reduce_loss
 
-            accelerator.backward(reduce_loss)
+            if self.need_backward:
+                if reduce_loss is None:
+                    raise LossNotProvidedError()
 
-            pipeline.on_backward_end(
-                self._get_hook_args(
-                    accelerator=accelerator,
-                    batch=ts_batch,
-                    model_outputs=outputs,
-                    reduce_loss=reduce_loss,
-                    **hook_kwargs,
-                )
-            )
+                with pipeline_hooks.begin(
+                    "on_backward",
+                    arg=self._get_hook_args(
+                        accelerator=accelerator,
+                        batch=ts_batch,
+                        model_outputs=outputs,
+                        reduce_loss=reduce_loss,
+                        **hook_kwargs,
+                    ),
+                ):
+                    accelerator.backward(reduce_loss)
 
-        pipeline.on_batch_end(
-            self._get_hook_args(
-                accelerator=accelerator,
-                batch=batch,
-                model_outputs=outputs,
-                reduce_loss=reduce_loss,
-                **hook_kwargs,
-            )
-        )
+            on_batch_hook_args.model_outputs = outputs
+            on_batch_hook_args.reduce_loss = reduce_loss
+
         return outputs

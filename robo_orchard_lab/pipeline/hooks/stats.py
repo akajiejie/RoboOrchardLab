@@ -22,7 +22,11 @@ from typing import Iterable, Optional
 from accelerate import Accelerator
 from accelerate.data_loader import DataLoaderShard
 
-from robo_orchard_lab.pipeline.hooks.mixin import HookArgs, HookMixin
+from robo_orchard_lab.pipeline.hooks.mixin import (
+    HookContextFromCallable,
+    PipelineHookArgs,
+    PipelineHooks,
+)
 
 __all__ = ["StatsMonitor"]
 
@@ -30,7 +34,7 @@ __all__ = ["StatsMonitor"]
 logger = logging.getLogger(__file__)
 
 
-class StatsMonitor(HookMixin):
+class StatsMonitor(PipelineHooks):
     """A hook to monitor and log training statistics.
 
     Including training speed, estimated time remaining, learning rate.
@@ -55,6 +59,7 @@ class StatsMonitor(HookMixin):
             epoch_log_freq (int): Frequency to log stats at the epoch level.
                 Logs are output every `epoch_log_freq` epochs.
         """
+        super().__init__()
         self.batch_size = batch_size
         self.steps_per_epoch = steps_per_epoch
 
@@ -74,6 +79,23 @@ class StatsMonitor(HookMixin):
         self._epoch_start_time = None
         self._last_epoch_id = 0
         self._epoch_start_step_id = 0
+
+        self.register_hook(
+            channel="on_loop",
+            hook=HookContextFromCallable(before=self._on_loop_begin),
+        )
+        self.register_hook(
+            channel="on_step",
+            hook=HookContextFromCallable(
+                before=self._on_step_begin, after=self._on_step_end
+            ),
+        )
+        self.register_hook(
+            channel="on_epoch",
+            hook=HookContextFromCallable(
+                before=self._on_epoch_begin, after=self._on_epoch_end
+            ),
+        )
 
     def _estimate_data_stats(
         self,
@@ -214,30 +236,30 @@ class StatsMonitor(HookMixin):
 
         return estimated_time
 
-    def on_loop_begin(self, args: HookArgs) -> None:
+    def _on_loop_begin(self, args: PipelineHookArgs) -> None:
         """Initializes timing and total batch size at the start of training.
 
         Args:
-            args (HookArgs): Hook arguments including accelerator
+            args (PipelineHookArgs): Hook arguments including accelerator
             and dataloader.
         """
         current_time = time.time()
         self._start_time = current_time
         self._estimate_data_stats(args.accelerator, args.dataloader)
 
-    def on_step_begin(self, args: HookArgs) -> None:
+    def _on_step_begin(self, args: PipelineHookArgs) -> None:
         self._step_start_time = time.time()
         self._last_step_id = args.global_step_id
 
-    def on_step_end(self, args: HookArgs) -> None:
+    def _on_step_end(self, args: PipelineHookArgs) -> None:
         """Callback when step ends.
 
         Logs the training speed and estimated remaining time at the end of
         each step.
 
         Args:
-            args (HookArgs): Hook arguments including current step and epoch
-            information.
+            args (PipelineHookArgs): Hook arguments including current step
+                and epoch information.
         """
         assert self._start_time is not None, (
             "Please call `on_loop_begin` first."
@@ -296,16 +318,16 @@ class StatsMonitor(HookMixin):
 
             logger.info(msg)
 
-    def on_epoch_begin(self, args: HookArgs) -> None:
+    def _on_epoch_begin(self, args: PipelineHookArgs) -> None:
         self._epoch_start_time = time.time()
         self._last_epoch_id = args.epoch_id
         self._epoch_start_step_id = args.global_step_id
 
-    def on_epoch_end(self, args: HookArgs) -> None:
+    def _on_epoch_end(self, args: PipelineHookArgs) -> None:
         """Logs the average epoch time and resets the epoch start time.
 
         Args:
-            args (HookArgs): Hook arguments including current epoch
+            args (PipelineHookArgs): Hook arguments including current epoch
             information.
         """
         assert self._start_time is not None, (

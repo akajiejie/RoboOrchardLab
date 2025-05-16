@@ -23,7 +23,7 @@ import torch
 from torchmetrics.classification import BinaryAccuracy
 
 from robo_orchard_lab.pipeline.hooks.metric import MetricEntry, MetricTracker
-from robo_orchard_lab.pipeline.hooks.mixin import HookArgs
+from robo_orchard_lab.pipeline.hooks.mixin import PipelineHookArgs
 
 
 class CustomMetricTracker(MetricTracker):
@@ -61,7 +61,7 @@ def mock_hook_args():
     accelerator.device = "cpu"
     accelerator.is_main_process = True
 
-    return HookArgs(
+    return PipelineHookArgs(
         accelerator=accelerator,
         epoch_id=0,
         step_id=0,
@@ -114,15 +114,24 @@ def test_metric_entry_get(mock_metric_entry):
 
 
 def test_on_step_end(
-    mock_metric_tracker, mock_hook_args, configure_per_process_logging
+    mock_metric_tracker: CustomMetricTracker,
+    mock_hook_args: PipelineHookArgs,
+    configure_per_process_logging,
 ):
     """Test the on_step_end method with logging."""
     mock_hook_args.step_id = 1  # Trigger logging for step_log_freq = 2
     mock_hook_args.global_step_id = 1
-    mock_metric_tracker.on_batch_end(mock_hook_args)  # Update before step_end
+
+    with mock_metric_tracker.begin(
+        "on_batch", mock_hook_args
+    ):  # Update before step_end
+        pass
 
     # Trigger step-end logic with logging
-    mock_metric_tracker.on_step_end(mock_hook_args)
+    with mock_metric_tracker.begin(
+        "on_step", mock_hook_args
+    ):  # Update before step_end
+        pass
 
     # Verify log output in the temporary file
     # log_file = configure_per_process_logging
@@ -132,13 +141,22 @@ def test_on_step_end(
 
 
 def test_on_epoch_end(
-    mock_metric_tracker, mock_hook_args, configure_per_process_logging
+    mock_metric_tracker: CustomMetricTracker,
+    mock_hook_args: PipelineHookArgs,
+    configure_per_process_logging,
 ):
     """Test the on_epoch_end method with logging."""
-    mock_metric_tracker.on_batch_end(mock_hook_args)  # Update before epoch_end
 
-    # Trigger epoch-end logic with logging
-    mock_metric_tracker.on_epoch_end(mock_hook_args)
+    with mock_metric_tracker.begin(
+        "on_batch", mock_hook_args
+    ):  # Update before step_end
+        pass
+
+    # Trigger step-end logic with logging
+    with mock_metric_tracker.begin(
+        "on_step", mock_hook_args
+    ):  # Update before step_end
+        pass
 
     # Verify log output in the temporary file
     # log_file = configure_per_process_logging
@@ -147,16 +165,25 @@ def test_on_epoch_end(
     # assert "Epoch[0]: accuracy[tensor(1.)]" in logs
 
 
-def test_reset_logic(mock_metric_tracker, mock_hook_args):
+def test_reset_logic(
+    mock_metric_tracker: CustomMetricTracker, mock_hook_args: PipelineHookArgs
+):
     """Test that metrics are reset based on reset_by and reset_freq."""
-    mock_metric_tracker.on_batch_end(mock_hook_args)
+    with mock_metric_tracker.begin(
+        "on_batch", mock_hook_args
+    ):  # Update before step_end
+        pass
 
     # Verify metrics are updated
     metric = mock_metric_tracker.metrics[0]
     assert metric.compute() == 1.0
 
     # Trigger epoch-end to reset
-    mock_metric_tracker.on_epoch_end(mock_hook_args)
+    with mock_metric_tracker.begin(
+        "on_epoch", mock_hook_args
+    ):  # Update before step_end
+        pass
+
     assert metric.compute() == 0.0
 
 
