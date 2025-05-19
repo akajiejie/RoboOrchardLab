@@ -15,6 +15,8 @@
 # permissions and limitations under the License.
 
 
+from typing import Optional
+
 import pytest
 import torch
 from accelerate import Accelerator
@@ -29,6 +31,7 @@ from robo_orchard_lab.pipeline.hooks.mixin import (
     PipelineHookArgs,
     PipelineHooks,
 )
+from robo_orchard_lab.pipeline.trainer import TrainerState
 
 
 class DummyPipelineHook(PipelineHooks):
@@ -60,6 +63,11 @@ class DummyPipelineHook(PipelineHooks):
                 before=self.on_step_begin, after=self.on_step_end
             ),
         )
+        self._on_epoch_begin_state: Optional[TrainerState] = None
+        self._on_epoch_end_state: Optional[TrainerState] = None
+
+        self._on_step_begin_state: Optional[TrainerState] = None
+        self._on_step_end_state: Optional[TrainerState] = None
 
     def on_loop_begin(self, args: PipelineHookArgs):
         self._on_loop_begin_cnt += 1
@@ -71,19 +79,54 @@ class DummyPipelineHook(PipelineHooks):
 
     def on_epoch_begin(self, args: PipelineHookArgs):
         self._on_epoch_begin_cnt += 1
-        print("Epoch begin")
+        self._on_epoch_begin_state = TrainerState(
+            epoch=args.epoch_id,
+            step=args.step_id,
+            global_step=args.global_step_id,
+        )
+        print("Epoch begin. begin state: ", self._on_epoch_begin_state)
 
     def on_epoch_end(self, args: PipelineHookArgs):
         self._on_epoch_end_cnt += 1
-        print("Epoch end")
+        self._on_epoch_end_state = TrainerState(
+            epoch=args.epoch_id,
+            step=args.step_id,
+            global_step=args.global_step_id,
+        )
+        print("Epoch end. end state: ", self._on_epoch_end_state)
+        print("Checking trainer state...")
+        assert self._on_epoch_begin_state is not None
+        assert (
+            self._on_epoch_end_state.epoch
+            == self._on_epoch_begin_state.epoch + 1
+        )
 
     def on_step_begin(self, args: PipelineHookArgs):
         self._on_step_begin_cnt += 1
-        print("Step begin")
+        self._on_step_begin_state = TrainerState(
+            epoch=args.epoch_id,
+            step=args.step_id,
+            global_step=args.global_step_id,
+        )
+        print("Step begin. begin state: ", self._on_step_begin_state)
 
     def on_step_end(self, args: PipelineHookArgs):
         self._on_step_end_cnt += 1
-        print("Step end")
+        self._on_step_end_state = TrainerState(
+            epoch=args.epoch_id,
+            step=args.step_id,
+            global_step=args.global_step_id,
+        )
+        print("Step end. end state: ", self._on_step_end_state)
+        print("Checking trainer state...")
+        assert self._on_step_begin_state is not None
+        assert (
+            self._on_step_end_state.step == self._on_step_begin_state.step + 1
+        )
+        assert (
+            self._on_step_end_state.global_step
+            == self._on_step_begin_state.global_step + 1
+        )
 
 
 class DummyMetric(Metric):

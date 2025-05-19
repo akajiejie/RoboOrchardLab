@@ -91,6 +91,20 @@ class TrainerState:
         self.epoch += 1
         self.step = 0
 
+    def sync_pipeline_hook_arg(self, hook_args: PipelineHookArgs) -> None:
+        """Synchronizes the training state with the provided hook arguments.
+
+        The hook arguments are updated with the current epoch, step, and
+        global_step.
+
+        Args:
+            hook_args (PipelineHookArgs): The hook arguments to synchronize
+            with.
+        """
+        hook_args.epoch_id = self.epoch
+        hook_args.step_id = self.step
+        hook_args.global_step_id = self.global_step
+
 
 class SimpleTrainer:
     """A base trainer class that extends SimpleTrainer for training models.
@@ -342,6 +356,8 @@ class SimpleTrainer:
                     self.eval()
                 # update module_output to be used by step hook
                 on_step_hook_args.model_outputs = model_outputs
+                self.trainer_state.update_step()
+                self.trainer_state.sync_pipeline_hook_arg(on_step_hook_args)
 
         with self.hooks.begin("on_loop", self._get_hook_args()):
             while not end_loop_flag:
@@ -355,15 +371,17 @@ class SimpleTrainer:
                 # If the dataloader has a different number of batches,
                 # the training loop may hang or produce unexpected results.
 
-                with self.hooks.begin("on_epoch", self._get_hook_args()):
-                    for batch in self.dataloader:
+                with self.hooks.begin(
+                    "on_epoch", self._get_hook_args()
+                ) as on_epoch_hook_args:
+                    for _i, batch in enumerate(self.dataloader):
                         step(
                             batch=batch,
                             batch_processor=self.batch_processor,
                             optimizer=self.optimizer,
                             lr_scheduler=self.lr_scheduler,
                         )
-                        self.trainer_state.update_step()
+
                         if (
                             self.max_step is not None
                             and self.trainer_state.global_step >= self.max_step
@@ -385,7 +403,11 @@ class SimpleTrainer:
                     ):
                         self.eval()
 
-                self.trainer_state.update_epoch()
+                    self.trainer_state.update_epoch()
+                    self.trainer_state.sync_pipeline_hook_arg(
+                        on_epoch_hook_args
+                    )
+
                 if (
                     self.max_epoch is not None
                     and self.trainer_state.epoch >= self.max_epoch
