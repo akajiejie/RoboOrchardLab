@@ -66,6 +66,8 @@ class SimpleBatchProcessor(BatchProcessorMixin):
 
         Args:
             need_backward (bool): Whether backward computation is needed.
+                If True, the loss should be provided during the forward pass.
+
             transforms (Optional[Callable | Sequence[Callable]]): A callable
                 or a sequence of callables for transforming the batch.
         """

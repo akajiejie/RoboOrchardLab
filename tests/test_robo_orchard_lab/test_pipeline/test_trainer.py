@@ -27,7 +27,7 @@ from torchmetrics import Metric
 from robo_orchard_lab.pipeline import SimpleTrainer
 from robo_orchard_lab.pipeline.batch_processor import SimpleBatchProcessor
 from robo_orchard_lab.pipeline.hooks.mixin import (
-    HookContextFromCallable,
+    HookContext,
     PipelineHookArgs,
     PipelineHooks,
 )
@@ -47,19 +47,19 @@ class DummyPipelineHook(PipelineHooks):
 
         self.register_hook(
             "on_loop",
-            HookContextFromCallable(
+            HookContext.from_callable(
                 before=self.on_loop_begin, after=self.on_loop_end
             ),
         )
         self.register_hook(
             "on_epoch",
-            HookContextFromCallable(
+            HookContext.from_callable(
                 before=self.on_epoch_begin, after=self.on_epoch_end
             ),
         )
         self.register_hook(
             "on_step",
-            HookContextFromCallable(
+            HookContext.from_callable(
                 before=self.on_step_begin, after=self.on_step_end
             ),
         )

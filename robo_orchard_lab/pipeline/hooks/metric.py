@@ -29,7 +29,7 @@ from typing import (
 from torchmetrics import Metric
 
 from robo_orchard_lab.pipeline.hooks.mixin import (
-    HookContextFromCallable,
+    HookContext,
     PipelineHookArgs,
     PipelineHooks,
 )
@@ -121,7 +121,7 @@ class MetricTracker(PipelineHooks):
                 processor or not. Defaults to True.
         """
         super().__init__()
-        self.metric_entrys = as_sequence(metric_entrys)
+        self.metric_entrys: Sequence[MetricEntry] = as_sequence(metric_entrys)
         self.metrics = [entry_i.metric for entry_i in self.metric_entrys]
         self.reset_by = reset_by
         self.reset_freq = reset_freq
@@ -133,19 +133,19 @@ class MetricTracker(PipelineHooks):
 
         self.register_hook(
             channel="on_loop",
-            hook=HookContextFromCallable(before=self._on_loop_begin),
+            hook=HookContext.from_callable(before=self._on_loop_begin),
         )
         self.register_hook(
             channel="on_batch",
-            hook=HookContextFromCallable(after=self._on_batch_end),
+            hook=HookContext.from_callable(after=self._on_batch_end),
         )
         self.register_hook(
             channel="on_step",
-            hook=HookContextFromCallable(after=self._on_step_end),
+            hook=HookContext.from_callable(after=self._on_step_end),
         )
         self.register_hook(
             channel="on_epoch",
-            hook=HookContextFromCallable(after=self._on_epoch_end),
+            hook=HookContext.from_callable(after=self._on_epoch_end),
         )
 
     @abstractmethod

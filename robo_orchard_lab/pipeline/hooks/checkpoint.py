@@ -20,7 +20,7 @@ from typing import Optional
 from accelerate import Accelerator
 
 from robo_orchard_lab.pipeline.hooks.mixin import (
-    HookContextFromCallable,
+    HookContext,
     PipelineHookArgs,
     PipelineHooks,
 )
@@ -89,11 +89,11 @@ class DoCheckpoint(PipelineHooks):
 
         self.register_hook(
             channel="on_step",
-            hook=HookContextFromCallable(after=self._on_step_end),
+            hook=HookContext.from_callable(after=self._on_step_end),
         )
         self.register_hook(
             channel="on_epoch",
-            hook=HookContextFromCallable(after=self._on_epoch_end),
+            hook=HookContext.from_callable(after=self._on_epoch_end),
         )
 
     def _check(self, accelerator: Accelerator) -> None:

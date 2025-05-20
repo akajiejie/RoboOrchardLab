@@ -23,7 +23,7 @@ from accelerate import Accelerator
 from accelerate.data_loader import DataLoaderShard
 
 from robo_orchard_lab.pipeline.hooks.mixin import (
-    HookContextFromCallable,
+    HookContext,
     PipelineHookArgs,
     PipelineHooks,
 )
@@ -82,17 +82,17 @@ class StatsMonitor(PipelineHooks):
 
         self.register_hook(
             channel="on_loop",
-            hook=HookContextFromCallable(before=self._on_loop_begin),
+            hook=HookContext.from_callable(before=self._on_loop_begin),
         )
         self.register_hook(
             channel="on_step",
-            hook=HookContextFromCallable(
+            hook=HookContext.from_callable(
                 before=self._on_step_begin, after=self._on_step_end
             ),
         )
         self.register_hook(
             channel="on_epoch",
-            hook=HookContextFromCallable(
+            hook=HookContext.from_callable(
                 before=self._on_epoch_begin, after=self._on_epoch_end
             ),
         )

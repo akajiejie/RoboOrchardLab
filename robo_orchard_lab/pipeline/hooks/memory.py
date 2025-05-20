@@ -19,7 +19,7 @@ from typing import Literal
 import torch
 
 from robo_orchard_lab.pipeline.hooks.mixin import (
-    HookContextFromCallable,
+    HookContext,
     PipelineHookArgs,
     PipelineHooks,
 )
@@ -106,10 +106,11 @@ class CUDAMemoryManager(PipelineHooks):
         self.empty_cache_freq = empty_cache_freq
 
         self.register_hook(
-            "on_step", hook=HookContextFromCallable(after=self._on_step_end)
+            "on_step", hook=HookContext.from_callable(after=self._on_step_end)
         )
         self.register_hook(
-            "on_epoch", hook=HookContextFromCallable(after=self._on_epoch_end)
+            "on_epoch",
+            hook=HookContext.from_callable(after=self._on_epoch_end),
         )
 
     def _on_step_end(self, arg: PipelineHookArgs) -> None:
