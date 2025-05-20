@@ -15,11 +15,12 @@
 # permissions and limitations under the License.
 
 from abc import ABC, abstractmethod
-from typing import Any, Callable
+from typing import Callable
 
-from accelerate import Accelerator
-
-from robo_orchard_lab.pipeline.hooks.mixin import PipelineHooks
+from robo_orchard_lab.pipeline.hooks.mixin import (
+    PipelineHookArgs,
+    PipelineHooks,
+)
 
 __all__ = ["BatchProcessorMixin"]
 
@@ -31,18 +32,22 @@ class BatchProcessorMixin(ABC):
     def __call__(
         self,
         pipeline_hooks: PipelineHooks,
-        accelerator: Accelerator,
-        batch: Any,
+        on_batch_hook_args: PipelineHookArgs,
         model: Callable,
-        **hook_kwargs,
     ) -> None:
         """Executes the batch processing pipeline.
 
         Args:
-            pipeline_hooks (PipelineHooks): The pipeline hooks.
-            accelerator (Accelerator): An instance of `Accelerator`.
-            batch (Any): Input batch data.
+            pipeline_hooks (PipelineHooks): The pipeline hooks to be triggered
+                during batch processing.
+            on_batch_hook_args (PipelineHookArgs): The workspace for the
+                on_batch hook. It should contain the following
+                attributes:
+                  - accelerator: The Accelerator instance.
+                  - batch: The batch of data to be processed.
+                After the call, it will contain:
+                  - reduce_loss: The computed loss.
+                  - model_outputs: The model outputs.
             model (Callable): The model function or callable.
-            **hook_kwargs: Additional arguments for hooks.
         """
         pass

@@ -25,7 +25,6 @@ from typing import (
     Sequence,
     Type,
     TypeAlias,
-    TypeVar,
 )
 
 import torch
@@ -49,9 +48,6 @@ __all__ = [
 ]
 
 
-T = TypeVar("T")
-
-
 @dataclass
 class PipelineHookArgs:
     """A data class for passing arguments to hook functions.
@@ -69,12 +65,16 @@ class PipelineHookArgs:
             starting from 0.
         global_step_id (int): The global step ID across all epochs,
             starting from 0.
-        start_epoch (int): The epoch where training or evaluation started.
         max_epoch (Optional[int]): The maximum number of epochs for training.
-        start_step (int): The step where training or evaluation started.
         max_step (Optional[int]): The maximum number of steps for training.
+        start_epoch (int): The epoch where training or evaluation started.
+            This should be set when resuming from checkpoints. Default is 0.
+        start_step (int): The step where training or evaluation started.
+            This should be set when resuming from checkpoints. Default is 0.
         dataloader (Optional[Iterable]): The data loader for feeding
-            batches to the model.
+            batches to the model. This should only be used to get the
+            properties of the dataloader, NOT for data access! The
+            `batch` attribute should be used for that.
         optimizer (Optional[torch.optim.Optimizer]): The optimizer used
             during training.
         lr_scheduler (Optional[torch.optim.lr_scheduler.LRScheduler]):
@@ -90,16 +90,40 @@ class PipelineHookArgs:
     epoch_id: int = 0
     step_id: int = 0
     global_step_id: int = 0
-    start_epoch: int = 0
     max_epoch: Optional[int] = None
-    start_step: int = 0
     max_step: Optional[int] = None
+    start_epoch: int = 0
+    start_step: int = 0
     dataloader: Optional[Iterable] = None
     optimizer: Optional[torch.optim.Optimizer] = None
     lr_scheduler: Optional[AcceleratedScheduler] = None
     batch: Optional[Any] = None
     model_outputs: Optional[Any] = None
     reduce_loss: Optional[torch.Tensor] = None
+
+    def copy_with_updates(self, **kwargs):
+        """Create a copy of the current instance with updated attributes.
+
+        This method allows you to create a new instance of the class with
+        modified attributes while keeping the original instance unchanged.
+
+        Args:
+            **kwargs: Keyword arguments representing the attributes to be
+                updated. The keys should match the attribute names of the
+                class.
+
+        Returns:
+            PipelineHookArgs: A new instance of the class with updated
+                attributes.
+        """
+
+        instance = self.__class__(**self.__dict__)
+        for key, value in kwargs.items():
+            if hasattr(instance, key):
+                setattr(instance, key, value)
+            else:
+                raise AttributeError(f"{key} is not a valid attribute")
+        return instance
 
 
 PipelineHookChanelType: TypeAlias = Literal[
@@ -119,7 +143,7 @@ class PipelineHooks:
             PipelineHookChanelType, HookContextChannel[PipelineHookArgs]
         ] = {}
         for c in PipelineHookChanelType.__args__:
-            self.hooks[c] = HookContextChannel(c)
+            self.hooks[c] = HookContextChannel[PipelineHookArgs](c)
 
     @contextmanager
     def begin(self, channel: PipelineHookChanelType, arg: PipelineHookArgs):
@@ -135,7 +159,8 @@ class PipelineHooks:
 
         Args:
             channel (PipelineHookChanelType): The channel to register the hook.
-            hook (HookContext[T]): The hook context handler to register.
+            hook (HookContext[PipelineHookArgs]): The hook context handler
+                to register.
 
         Returns:
             RemoveableHandle: A handle to remove the registered hook.
@@ -196,7 +221,9 @@ class PipelineHooks:
         """
 
         input_hooks: Sequence[PipelineHooks] = as_sequence(
-            hooks, check_type=True, required_types=PipelineHooks
+            hooks,
+            check_type=True,
+            required_types=PipelineHooks,
         )
         ret = cls()
         for hook in input_hooks:

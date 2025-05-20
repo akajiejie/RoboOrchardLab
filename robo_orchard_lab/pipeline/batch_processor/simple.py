@@ -41,6 +41,9 @@ __all__ = ["SimpleBatchProcessor"]
 logger = logging.getLogger(__file__)
 
 
+forward_fn_type = Callable[[Callable, Any], Tuple[Any, Optional[torch.Tensor]]]
+
+
 class LossNotProvidedError(Exception):
     pass
 
@@ -73,10 +76,37 @@ class SimpleBatchProcessor(BatchProcessorMixin):
         """
         self.need_backward = need_backward
         self.transform = Compose(as_sequence(transforms))
-        self.is_init = False
+
+        self._is_prepared = False
+        self.accelerator: Optional[Accelerator] = None
+
+    @staticmethod
+    def from_callable(
+        forward_fn: forward_fn_type,
+        need_backward: bool = True,
+        transforms: Optional[Callable | Sequence[Callable]] = None,
+    ):
+        """Creates a SimpleBatchProcessor instance from a callable.
+
+        Args:
+            forward_fn (Callable): The forward function to be used for
+                processing batches.
+            need_backward (bool): Whether backward computation is needed.
+                If True, the loss should be provided during the forward pass.
+            transforms (Optional[Callable | Sequence[Callable]]): A callable
+                or a sequence of callables for transforming the batch.
+
+        Returns:
+            SimpleBatchProcessor: An instance of SimpleBatchProcessor.
+        """
+        return BatchProcessorFromCallable(
+            forward_fn=forward_fn,
+            need_backward=need_backward,
+            transforms=transforms,
+        )
 
     def _initialize(self, accelerator: Accelerator) -> None:
-        if self.is_init:
+        if self._is_prepared:
             return
 
         for key, obj in vars(self).items():
@@ -84,30 +114,13 @@ class SimpleBatchProcessor(BatchProcessorMixin):
                 new_obj = accelerator.prepare(obj)
                 setattr(self, key, new_obj)
 
-        self.is_init = True
-
-    def _get_hook_args(
-        self,
-        accelerator: Accelerator,
-        batch: Optional[Any] = None,
-        model_outputs: Optional[Any] = None,
-        reduce_loss: Optional[torch.Tensor] = None,
-        **hook_kwargs,
-    ) -> PipelineHookArgs:
-        return PipelineHookArgs(
-            accelerator=accelerator,
-            batch=batch,
-            model_outputs=model_outputs,
-            reduce_loss=reduce_loss,
-            **hook_kwargs,
-        )
+        self._is_prepared = True
 
     @abstractmethod
-    def do_forward(
+    def forward(
         self,
         model: Callable,
         batch: Any,
-        device: torch.device,
     ) -> Tuple[Any, Optional[torch.Tensor]]:
         """Defines the forward pass logic for the model.
 
@@ -121,9 +134,6 @@ class SimpleBatchProcessor(BatchProcessorMixin):
                 or a function).
             batch (Any): The input batch data. This can be a tuple, dictionary,
                 or other structure, depending on the data pipeline's format.
-            device (torch.device): The device on which computation will be
-                executed (e.g., `torch.device('cuda')` for GPU or
-                `torch.device('cpu')`).
 
         Returns:
             Tuple[Any, Optional[torch.Tensor]]:
@@ -155,62 +165,73 @@ class SimpleBatchProcessor(BatchProcessorMixin):
     def __call__(
         self,
         pipeline_hooks: PipelineHooks,
-        accelerator: Accelerator,
-        batch: Any,
+        on_batch_hook_args: PipelineHookArgs,
         model: Callable,
-        **hook_kwargs,
     ) -> None:
-        """Executes the batch processing pipeline.
-
-        Args:
-            pipeline_hooks (PipelineHooks): The pipeline object managing hooks.
-            accelerator (Accelerator): An instance of `Accelerator`.
-            batch (Any): Input batch data.
-            model (Callable): The model function or callable.
-            **hook_kwargs: Additional arguments for hooks.
-        """
-
-        self._initialize(accelerator=accelerator)
+        self._initialize(accelerator=on_batch_hook_args.accelerator)
+        batch = on_batch_hook_args.batch
+        # transform the batch
+        ts_batch = self.transform(batch)
 
         with pipeline_hooks.begin(
-            "on_batch",
-            self._get_hook_args(
-                accelerator=accelerator, batch=batch, **hook_kwargs
-            ),
-        ) as on_batch_hook_args:
-            ts_batch = self.transform(batch)
+            "on_forward",
+            arg=on_batch_hook_args.copy_with_updates(batch=ts_batch),
+        ) as on_forward_hook_args:
+            self.accelerator = on_forward_hook_args.accelerator
+            outputs, reduce_loss = self.forward(
+                model=model,
+                batch=ts_batch,
+            )
+            on_forward_hook_args.model_outputs = outputs
+            on_forward_hook_args.reduce_loss = reduce_loss
+
+        if self.need_backward:
+            if reduce_loss is None:
+                raise LossNotProvidedError()
 
             with pipeline_hooks.begin(
-                "on_forward",
-                arg=self._get_hook_args(
-                    accelerator=accelerator, batch=ts_batch, **hook_kwargs
-                ),
-            ) as on_forward_hook_args:
-                outputs, reduce_loss = self.do_forward(
-                    model=model,
+                "on_backward",
+                arg=on_batch_hook_args.copy_with_updates(
                     batch=ts_batch,
-                    device=accelerator.device,
-                )
-                on_forward_hook_args.model_outputs = outputs
-                on_forward_hook_args.reduce_loss = reduce_loss
+                    model_outputs=outputs,
+                    reduce_loss=reduce_loss,
+                ),
+            ) as on_backward_hook_args:
+                on_backward_hook_args.accelerator.backward(reduce_loss)
 
-            if self.need_backward:
-                if reduce_loss is None:
-                    raise LossNotProvidedError()
+        on_batch_hook_args.model_outputs = outputs
+        on_batch_hook_args.reduce_loss = reduce_loss
 
-                with pipeline_hooks.begin(
-                    "on_backward",
-                    arg=self._get_hook_args(
-                        accelerator=accelerator,
-                        batch=ts_batch,
-                        model_outputs=outputs,
-                        reduce_loss=reduce_loss,
-                        **hook_kwargs,
-                    ),
-                ):
-                    accelerator.backward(reduce_loss)
 
-            on_batch_hook_args.model_outputs = outputs
-            on_batch_hook_args.reduce_loss = reduce_loss
+class BatchProcessorFromCallable(
+    SimpleBatchProcessor,
+):
+    """A processor for handling batches in a training or inference pipeline.
 
-        return outputs
+    This class is designed to be used as a callable object, allowing it to
+    be easily integrated into various training or inference pipelines.
+    It provides a flexible interface for processing batches of data and
+    performing model inference or training.
+
+    Attributes:
+        need_backward (bool): Whether backward computation is needed.
+        transform (Compose): Transformation pipeline for batch data.
+        is_init (bool): Whether the processor has been initialized.
+    """
+
+    def __init__(
+        self,
+        forward_fn: forward_fn_type,
+        need_backward: bool = True,
+        transforms: Optional[Callable | Sequence[Callable]] = None,
+    ) -> None:
+        super().__init__(need_backward=need_backward, transforms=transforms)
+
+        self._forward_fn = forward_fn
+
+    def forward(
+        self,
+        model: Callable,
+        batch: Any,
+    ) -> Tuple[Any, Optional[torch.Tensor]]:
+        return self._forward_fn(model, batch)

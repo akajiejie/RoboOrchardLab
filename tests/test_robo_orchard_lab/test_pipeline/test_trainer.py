@@ -155,8 +155,14 @@ class SimpleModel(torch.nn.Module):
 class DummyBatchProcessor(SimpleBatchProcessor):
     """A simple batch processor for testing."""
 
-    def do_forward(self, model, batch, device):
-        outputs = model(batch.to(device))
+    def forward(self, model: torch.nn.Module, batch: torch.Tensor):
+        if (
+            self.accelerator is not None
+            and batch.device != self.accelerator.device
+        ):
+            batch = batch.to(self.accelerator.device)
+
+        outputs = model(batch)
         loss = torch.mean((outputs - 1) ** 2)  # Mean squared error loss
         return outputs, loss
 
@@ -171,7 +177,7 @@ def dummy_trainer():
     ]
     optimizer = SGD(params=model.parameters(), lr=0.01)
     lr_scheduler = StepLR(optimizer, step_size=1, gamma=0.1)
-    accelerator = Accelerator()
+    accelerator = Accelerator(device_placement=True)
     batch_processor = DummyBatchProcessor()
 
     trainer = SimpleTrainer(

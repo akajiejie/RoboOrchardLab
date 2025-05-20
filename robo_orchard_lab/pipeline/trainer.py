@@ -18,7 +18,7 @@ import logging
 import os
 from dataclasses import dataclass
 from inspect import signature
-from typing import Any, Callable, Dict, Iterable, List, Literal, Optional
+from typing import Any, Dict, Iterable, List, Literal, Optional
 
 import requests
 import torch
@@ -26,6 +26,7 @@ from accelerate import Accelerator
 from accelerate.scheduler import AcceleratedScheduler
 from torch.utils.data import DataLoader
 
+from robo_orchard_lab.pipeline.batch_processor.mixin import BatchProcessorMixin
 from robo_orchard_lab.pipeline.hooks.mixin import (
     PipelineHookArgs,
     PipelineHooks,
@@ -154,7 +155,7 @@ class SimpleTrainer:
         self,
         model: torch.nn.Module,
         accelerator: Accelerator,
-        batch_processor: Optional[Callable] = None,
+        batch_processor: Optional[BatchProcessorMixin] = None,
         dataloader: Optional[DataLoader | Iterable] = None,
         optimizer: Optional[torch.optim.Optimizer] = None,
         lr_scheduler: Optional[torch.optim.lr_scheduler.LRScheduler] = None,
@@ -317,7 +318,7 @@ class SimpleTrainer:
 
         def step(
             batch: Any,
-            batch_processor: Callable,
+            batch_processor: BatchProcessorMixin,
             optimizer: torch.optim.Optimizer,
             lr_scheduler: Optional[AcceleratedScheduler],
         ):
@@ -325,20 +326,19 @@ class SimpleTrainer:
                 "on_step", self._get_hook_args()
             ) as on_step_hook_args:
                 optimizer.zero_grad()
-                model_outputs = batch_processor(
-                    pipeline_hooks=self.hooks,
-                    accelerator=self.accelerator,
-                    batch=batch,
-                    model=self.model,
-                    max_step=self.max_step,
-                    max_epoch=self.max_epoch,
-                    epoch_id=self.trainer_state.epoch,
-                    step_id=self.trainer_state.step,
-                    global_step_id=self.trainer_state.global_step,
-                    dataloader=self.dataloader,
-                    optimizer=optimizer,
-                    lr_scheduler=lr_scheduler,
-                )
+                with self.hooks.begin(
+                    "on_batch", self._get_hook_args(batch=batch)
+                ) as on_batch_hook_args:
+                    batch_processor(
+                        pipeline_hooks=self.hooks,
+                        on_batch_hook_args=on_batch_hook_args,
+                        model=self.model,
+                    )
+                    # update module_output to on_step_hook_args
+                    on_step_hook_args.model_outputs = (
+                        on_batch_hook_args.model_outputs
+                    )
+
                 self._clip_grad()
                 optimizer.step()
                 if (
@@ -354,8 +354,7 @@ class SimpleTrainer:
                     == 0
                 ):
                     self.eval()
-                # update module_output to be used by step hook
-                on_step_hook_args.model_outputs = model_outputs
+
                 self.trainer_state.update_step()
                 self.trainer_state.sync_pipeline_hook_arg(on_step_hook_args)
 
