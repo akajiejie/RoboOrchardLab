@@ -131,9 +131,8 @@ PipelineHookChanelType: TypeAlias = Literal[
     "on_epoch",  # in one epoch pipeline
     "on_step",  # in one step pipeline.
     "on_batch",  # in one batch pipeline
-    # "on_optimizer_step", # not used now
-    "on_forward",
-    "on_backward",
+    "on_model_forward",  # only in model forward pipeline
+    "on_model_backward",  # only in model backward pipeline
 ]
 
 

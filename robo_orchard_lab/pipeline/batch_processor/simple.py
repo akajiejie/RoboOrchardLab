@@ -174,7 +174,7 @@ class SimpleBatchProcessor(BatchProcessorMixin):
         ts_batch = self.transform(batch)
 
         with pipeline_hooks.begin(
-            "on_forward",
+            "on_model_forward",
             arg=on_batch_hook_args.copy_with_updates(batch=ts_batch),
         ) as on_forward_hook_args:
             self.accelerator = on_forward_hook_args.accelerator
@@ -190,7 +190,7 @@ class SimpleBatchProcessor(BatchProcessorMixin):
                 raise LossNotProvidedError()
 
             with pipeline_hooks.begin(
-                "on_backward",
+                "on_model_backward",
                 arg=on_batch_hook_args.copy_with_updates(
                     batch=ts_batch,
                     model_outputs=outputs,
