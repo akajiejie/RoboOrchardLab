@@ -33,6 +33,7 @@ class OptimizerHook(PipelineHooks):
 
     def __init__(self):
         super().__init__()
+        print("OptimizerHook init")
         self.register_hook(
             "on_step",
             HookContext.from_callable(
@@ -62,7 +63,6 @@ class OptimizerHook(PipelineHooks):
             raise ValueError(
                 "Learning rate scheduler is not set in the hook arguments."
             )
-
         # Perform the optimization step
         hook_args.optimizer.step()
         hook_args.lr_scheduler.step()

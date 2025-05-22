@@ -15,34 +15,42 @@
 # permissions and limitations under the License.
 
 
+import os
+import subprocess
+import tempfile
+
 import pytest
 
 
-def test_resnet50_imagenet():
+def test_resnet50_imagenet(PROJECT_ROOT: str):
     """Test ResNet50 training on ImageNet dataset."""
-    # Run the training script with the specified parameters
-    # result = subprocess.run(
-    #     [
-    #         "python",
-    #         "examples/resnet50_imagenet.py",
-    #         "--batch_size",
-    #         "32",
-    #         "--num_epochs",
-    #         "1",
-    #         "--learning_rate",
-    #         "0.01",
-    #     ],
-    #     capture_output=True,
-    #     text=True,
-    # )
+    example_file_path = os.path.join(
+        PROJECT_ROOT, "examples", "resnet50_imagenet", "train.py"
+    )
 
-    # # Check if the script ran successfully
-    # assert result.returncode == 0, \
-    # f"Script failed with error: {result.stderr}"
-    # assert "Training completed" in result.stdout, (
-    #     "Training did not complete successfully"
-    # )
-    pass
+    assert os.path.exists(example_file_path), (
+        f"File not found: {example_file_path}"
+    )
+    example_file_path = os.path.relpath(example_file_path, os.getcwd())
+
+    # Run the training script with the specified parameters
+    with tempfile.TemporaryDirectory() as workspace_root:
+        ret_code = subprocess.check_call(
+            " ".join(
+                [
+                    "python3",
+                    f"{example_file_path}",
+                    "--dataset.pipeline_test True ",
+                    "--dataset.dummy_train_imgs 8192 ",
+                    "--max_epoch 2",
+                    f"--workspace_root {workspace_root}",
+                ]
+            ),
+            shell=True,
+        )
+
+        # Check if the script ran successfully
+        assert ret_code == 0, f"Script failed with return code: {ret_code}"
 
 
 if __name__ == "__main__":

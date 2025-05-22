@@ -151,6 +151,11 @@ class TrainerConfig(SettingConfig):
         default=90,
     )
 
+    workspace_root: str = Field(
+        description="Workspace root directory.",
+        default="./workspace/",
+    )
+
 
 class MyBatchProcessor(SimpleBatchProcessor):
     """A simple example for a batch processor."""
@@ -159,11 +164,10 @@ class MyBatchProcessor(SimpleBatchProcessor):
         super().__init__(*args, **kwargs)
         self.criterion = torch.nn.CrossEntropyLoss()
 
-    def do_forward(
+    def forward(
         self,
         model: torch.nn.Module,
         batch: Tuple[torch.Tensor, torch.Tensor],
-        device: torch.device,
     ) -> Tuple[Any, Optional[torch.Tensor]]:
         images, target = batch
 
@@ -208,9 +212,9 @@ def main(cfg: TrainerConfig):
     )
     lr_scheduler = StepLR(optimizer, step_size=30, gamma=0.1)
 
-    workspace_root = "./workspace/"
+    workspace_root = cfg.workspace_root
     last_ckpt_iteration = get_accelerate_project_last_checkpoint_id(
-        "./workspace"
+        workspace_root
     )
 
     accelerator = Accelerator(
@@ -254,9 +258,6 @@ def main(cfg: TrainerConfig):
             DoCheckpoint(save_step_freq=1024),
         ],
     )
-
-    if accelerator.is_main_process:
-        logger.info("\n" + "=" * 50 + "BEGIN TRAINING" + "=" * 50)
 
     trainer()
 

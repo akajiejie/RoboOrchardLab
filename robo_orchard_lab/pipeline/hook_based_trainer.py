@@ -61,13 +61,13 @@ class TrainerProgressState(AcceleratorState):
 
     def update_step(self) -> None:
         """Increments the step and global_step by 1."""
-        self.step += 1
-        self.global_step += 1
+        self.step_id += 1
+        self.global_step_id += 1
 
     def update_epoch(self) -> None:
         """Increments the epoch by 1 and resets the step to 0."""
-        self.epoch += 1
-        self.step = 0
+        self.epoch_id += 1
+        self.step_id = 0
 
     def is_training_end(
         self, max_step: int | None, max_epoch: int | None
@@ -292,12 +292,12 @@ class HookBasedTrainer:
             )
 
         self.accelerator = accelerator
-        self.model = model
         user_hooks = PipelineHooks.from_hooks(hooks)
         self.max_step = max_step
         self.max_epoch = max_epoch
 
         # prepare using accelerator
+        self.model: torch.nn.Module = accelerator.prepare(model)
         self.dataloader: DataLoader = accelerator.prepare(dataloader)
         self.optimizer: AcceleratedOptimizer = accelerator.prepare(optimizer)
         self.lr_scheduler: AcceleratedScheduler = accelerator.prepare(

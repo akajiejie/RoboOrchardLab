@@ -61,7 +61,13 @@ doc-clean:
 	make -C docs clean
 
 test:
-	make -C tests
+	make -C tests 
+
+test_ut:
+	make -C tests test_ut
+
+test_it:
+	make -C tests test_it
 
 show-args:
 	@echo "PIP_ARGS: $(PIP_ARGS)"

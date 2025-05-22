@@ -2,7 +2,7 @@
 PYTEST_OPT := -rf -x -n 2 --dist loadgroup
 
 
-test: test_ut
+test: test_ut  test_it
 
 test_ut:
 	mkdir -p ../build/test && cd ../build/test && pytest -x -c ../../tests/pytest.ini $(PYTEST_OPT) \
@@ -11,7 +11,7 @@ test_ut:
 	--cov-report=html --junitxml=unittest.xml --html=unittest.html
 
 test_it:
-	mkdir -p ../build/test && cd ../build/test && pytest -x -c ../../tests/pytest.ini -x -n 1 --dist loadgroup \
+	mkdir -p ../build/test && cd ../build/test && pytest -x -c ../../tests/pytest.ini -n 1 --dist loadgroup \
 	../../tests/test_examples --alluredir allure_integrationtest/ \
 	--junitxml=integrationtest.xml --html=integrationtest.html
 

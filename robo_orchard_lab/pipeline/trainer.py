@@ -15,18 +15,23 @@
 # permissions and limitations under the License.
 
 import logging
-import os
+import weakref
 from dataclasses import dataclass
 from inspect import signature
-from typing import Any, Dict, Iterable, List, Literal, Optional
+from typing import Any, Dict, Iterable, Literal, Optional
 
-import requests
+import deprecated
 import torch
 from accelerate import Accelerator
-from accelerate.scheduler import AcceleratedScheduler
 from torch.utils.data import DataLoader
 
 from robo_orchard_lab.pipeline.batch_processor.mixin import BatchProcessorMixin
+from robo_orchard_lab.pipeline.hook_based_trainer import (
+    GradClipConfig,
+    HookBasedTrainer,
+    ResumeCheckpointConfig,
+    ValidationConfig,
+)
 from robo_orchard_lab.pipeline.hooks.mixin import (
     PipelineHookArgs,
     PipelineHooks,
@@ -107,7 +112,11 @@ class TrainerState:
         hook_args.global_step_id = self.global_step
 
 
-class SimpleTrainer:
+@deprecated.deprecated(
+    reason="This class is deprecated. Use `HookBasedTrainer` instead.",
+    version="0.1.0",
+)
+class SimpleTrainer(HookBasedTrainer):
     """A base trainer class that extends SimpleTrainer for training models.
 
     This trainer integrates with the `Accelerate` library for distributed
@@ -118,7 +127,7 @@ class SimpleTrainer:
         model (torch.nn.Module): The model to be trained.
         accelerator (Accelerator): The `Accelerator` instance managing
             distributed training.
-        batch_processor (Optional[BatchProcessorMixin]): A processor that
+        batch_processor (BatchProcessorMixin): A processor that
             defines how to handle each batch during training.
         dataloader (Optional[DataLoader]): The data loader for feeding batches
             to the model.
@@ -155,11 +164,11 @@ class SimpleTrainer:
         self,
         model: torch.nn.Module,
         accelerator: Accelerator,
-        batch_processor: Optional[BatchProcessorMixin] = None,
-        dataloader: Optional[DataLoader | Iterable] = None,
-        optimizer: Optional[torch.optim.Optimizer] = None,
-        lr_scheduler: Optional[torch.optim.lr_scheduler.LRScheduler] = None,
-        lr_scheduler_step_at: Literal["step", "epoch"] = "step",
+        batch_processor: BatchProcessorMixin,
+        dataloader: DataLoader | Iterable,
+        optimizer: torch.optim.Optimizer,
+        lr_scheduler: torch.optim.lr_scheduler.LRScheduler,
+        lr_scheduler_step_at: Literal["step"] = "step",
         max_step: Optional[int] = None,
         max_epoch: Optional[int] = None,
         val_dataloader: Optional[DataLoader | Iterable] = None,
@@ -168,274 +177,79 @@ class SimpleTrainer:
         epoch_eval_freq: Optional[int] = None,
         resume_from: Optional[str] = None,
         resume_share_dir: Optional[str] = None,
-        grad_clip_mode: Optional[str] = None,
+        grad_clip_mode: Optional[Literal["value", "norm"]] = None,
         grad_clip_value: Optional[float] = None,
         grad_max_norm: Optional[float] = None,
         grad_norm_type: int = 2,
         hooks: PipelineHooks | Iterable[PipelineHooks] | None = None,
     ):
-        self.hooks = PipelineHooks.from_hooks(hooks)
-        self.batch_processor = batch_processor
-        self.lr_scheduler_step_at = lr_scheduler_step_at
-        self.max_step = max_step
-        self.max_epoch = max_epoch
+        # make sure that lr_scheduler_step_at is always "step" or "epoch"
+        assert lr_scheduler_step_at in [
+            "step",
+        ], "lr_scheduler_step_at is deprecated. It should always be 'step'."
+
+        # convert resume parameters to ResumeCheckpointConfig
+        if resume_from is not None:
+            resume_cfg = ResumeCheckpointConfig(
+                resume_from=resume_from,
+                cache_dir=resume_share_dir
+                if resume_share_dir
+                else "/tmp/resume_from",
+            )
+        else:
+            resume_cfg = None
+
+        # convert grad_clip parameters to GradClipConfig
+        if grad_clip_mode is not None:
+            grad_clip_cfg = GradClipConfig(
+                clip_mode=grad_clip_mode,
+                clip_value=grad_clip_value,
+                max_norm=grad_max_norm,
+                norm_type=grad_norm_type,
+            )
+        else:
+            grad_clip_cfg = None
+
+        # convert validation parameters to ValidationConfig
+        if val_dataloader is not None:
+            # use weakref.proxy to avoid circular reference
+            self_proxy: SimpleTrainer = weakref.proxy(self)  # type: ignore
+
+            def eval_callback():
+                self_proxy.eval()
+
+            val_cfg = ValidationConfig(
+                eval_callback=eval_callback,
+                step_eval_freq=step_eval_freq,
+                epoch_eval_freq=epoch_eval_freq,
+            )
+        else:
+            val_cfg = None
+
+        super().__init__(
+            model=model,
+            accelerator=accelerator,
+            batch_processor=batch_processor,
+            dataloader=dataloader,
+            optimizer=optimizer,
+            lr_scheduler=lr_scheduler,
+            max_step=max_step,
+            max_epoch=max_epoch,
+            hooks=PipelineHooks.from_hooks(hooks),
+            resume_from=resume_cfg,
+            grad_clip=grad_clip_cfg,
+            validation=val_cfg,
+        )
+        # only val_dataloader and metric are required for this class,
+        # as the rest of the parameters are used by the parent class!
+
         self.metric = metric
-        self.step_eval_freq = step_eval_freq
-        self.epoch_eval_freq = epoch_eval_freq
-        self.resume_from = resume_from
-        self.resume_share_dir = resume_share_dir
-        assert grad_clip_mode in [None, "value", "norm"]
-        self.grad_clip_mode = grad_clip_mode
-        self.grad_clip_value = grad_clip_value
-        self.grad_max_norm = grad_max_norm
-        self.grad_norm_type = grad_norm_type
-
-        self.accelerator = accelerator
-        self.model: torch.nn.Module = accelerator.prepare(model)
-
-        self.trainer_state = TrainerState()
-        accelerator.register_for_checkpointing(self.trainer_state)
-
-        if dataloader is not None:
-            self.dataloader: Optional[DataLoader] = accelerator.prepare(
-                dataloader
-            )
-        else:
-            self.dataloader = None
-
-        if optimizer is not None:
-            self.optimizer: Optional[torch.optim.Optimizer] = (
-                accelerator.prepare(optimizer)
-            )
-        else:
-            self.optimizer = None
-
-        if lr_scheduler is not None:
-            self.lr_scheduler: Optional[AcceleratedScheduler] = (
-                accelerator.prepare(lr_scheduler)
-            )
-        else:
-            self.lr_scheduler = None
-
         if val_dataloader is not None:
             self.val_dataloader = accelerator.prepare(val_dataloader)
         else:
             self.val_dataloader = None
 
-        self.resume(resume_from)
-
-    def resume(self, resume_from: Optional[str]) -> None:
-        """Resumes training from a checkpoint or URL.
-
-        If `resume_from` is a local path, it loads the state directly.
-        If `resume_from` is a URL, it downloads the checkpoint files and
-        loads the state.
-        """
-        if resume_from is None:
-            return
-        if self.accelerator.is_main_process:
-            logger.info(f"resume from: {resume_from}")
-        if os.path.exists(resume_from):
-            self.accelerator.load_state(resume_from)
-        elif resume_from.startswith("http"):
-            if self.resume_share_dir is not None:
-                dir = self.resume_share_dir
-            else:
-                dir = "/tmp/resume_from"
-            _acn = self.accelerator.project_configuration.automatic_checkpoint_naming  # noqa: E501
-            self.accelerator.project_configuration.automatic_checkpoint_naming = (  # noqa: E501
-                False
-            )
-            self.accelerator.save_state(dir)
-            if self.accelerator.is_main_process:
-                file_names = list(os.listdir(dir))
-                for file in file_names:
-                    with requests.get(
-                        f"{resume_from}/{file}", stream=True
-                    ) as r:
-                        if r.status_code != 200:
-                            logger.warning(
-                                f"request {file} failed, status {r.status_code}"  # noqa: E501
-                            )
-                            continue
-                        with open(os.path.join(dir, file), "wb") as f:
-                            for chunk in r.iter_content(chunk_size=8192):
-                                f.write(chunk)
-            self.accelerator.wait_for_everyone()
-            self.accelerator.load_state(dir)
-            self.accelerator.project_configuration.automatic_checkpoint_naming = (  # noqa: E501
-                _acn
-            )
-        else:
-            raise ValueError(f"resume data is not available: {resume_from}")
-
-    def _get_hook_args(self, **kwargs) -> PipelineHookArgs:
-        """Get Hook args.
-
-        Creates and returns a HookArgs object with current training state
-        and additional arguments.
-
-        Args:
-            **kwargs: Additional arguments to include in the HookArgs object.
-
-        Returns:
-            PipelineHookArgs: An object containing the current training state
-                and additional arguments.
-        """
-        hookargs = PipelineHookArgs(
-            accelerator=self.accelerator,
-            max_step=self.max_step,
-            max_epoch=self.max_epoch,
-            epoch_id=self.trainer_state.epoch,
-            step_id=self.trainer_state.step,
-            global_step_id=self.trainer_state.global_step,
-            dataloader=self.dataloader,
-            optimizer=self.optimizer,
-            lr_scheduler=self.lr_scheduler,
-        )
-
-        for k, v in kwargs.items():
-            setattr(hookargs, k, v)
-        return hookargs
-
-    def __call__(self) -> None:
-        """Executes the training loop, iterating over epochs and steps.
-
-        This method handles the main training loop, including evaluation
-        at specified intervals, and calls the appropriate hooks at the
-        beginning and end of each epoch and step.
-        """
-        assert self.dataloader is not None, "dataloader should not be None"
-        assert self.optimizer is not None, "optimizer should not be None"
-        assert self.batch_processor is not None, (
-            "batch_processor should not be None"
-        )
-        if self.accelerator.is_main_process:
-            logger.info("\n" + "=" * 50 + "BEGIN TRAINING" + "=" * 50)
-
-        end_loop_flag = False
-        self.model.train()
-
-        def step(
-            batch: Any,
-            batch_processor: BatchProcessorMixin,
-            optimizer: torch.optim.Optimizer,
-            lr_scheduler: Optional[AcceleratedScheduler],
-        ):
-            with self.hooks.begin(
-                "on_step", self._get_hook_args()
-            ) as on_step_hook_args:
-                optimizer.zero_grad()
-                with self.hooks.begin(
-                    "on_batch", self._get_hook_args(batch=batch)
-                ) as on_batch_hook_args:
-                    batch_processor(
-                        pipeline_hooks=self.hooks,
-                        on_batch_hook_args=on_batch_hook_args,
-                        model=self.model,
-                    )
-                    # update module_output to on_step_hook_args
-                    on_step_hook_args.model_outputs = (
-                        on_batch_hook_args.model_outputs
-                    )
-
-                self._clip_grad()
-                optimizer.step()
-                if (
-                    self.lr_scheduler_step_at == "step"
-                    and lr_scheduler is not None
-                ):
-                    lr_scheduler.scheduler.step()
-                # evaluate when step matches step_eval_freq
-                if (
-                    self.step_eval_freq is not None
-                    and (self.trainer_state.global_step + 1)
-                    % self.step_eval_freq
-                    == 0
-                ):
-                    self.eval()
-
-                self.trainer_state.update_step()
-                self.trainer_state.sync_pipeline_hook_arg(on_step_hook_args)
-
-        with self.hooks.begin("on_loop", self._get_hook_args()):
-            while not end_loop_flag:
-                # TODO: Synchronize end_loop_flag when different
-                # processes have different batch numbers. !
-                #
-                # In some cases, the dataloader may not have the same
-                # number of batches when dataset is split into
-                # different processes.
-                #
-                # If the dataloader has a different number of batches,
-                # the training loop may hang or produce unexpected results.
-
-                with self.hooks.begin(
-                    "on_epoch", self._get_hook_args()
-                ) as on_epoch_hook_args:
-                    for _i, batch in enumerate(self.dataloader):
-                        step(
-                            batch=batch,
-                            batch_processor=self.batch_processor,
-                            optimizer=self.optimizer,
-                            lr_scheduler=self.lr_scheduler,
-                        )
-
-                        if (
-                            self.max_step is not None
-                            and self.trainer_state.global_step >= self.max_step
-                        ):
-                            end_loop_flag = True
-                            break
-
-                    if (
-                        self.lr_scheduler_step_at == "epoch"
-                        and self.lr_scheduler is not None
-                    ):
-                        self.lr_scheduler.scheduler.step()
-
-                    if (
-                        self.epoch_eval_freq is not None
-                        and (self.trainer_state.epoch + 1)
-                        % self.epoch_eval_freq
-                        == 0
-                    ):
-                        self.eval()
-
-                    self.trainer_state.update_epoch()
-                    self.trainer_state.sync_pipeline_hook_arg(
-                        on_epoch_hook_args
-                    )
-
-                if (
-                    self.max_epoch is not None
-                    and self.trainer_state.epoch >= self.max_epoch
-                ):
-                    end_loop_flag = True
-
-    def _clip_grad(self) -> None:
-        """Clips gradients based on the specified mode and values.
-
-        This method clips gradients either by value or by norm, depending
-        on the configuration.
-        """
-        if self.grad_clip_mode is None:
-            return
-        assert self.optimizer is not None, "optimizer should not be None"
-        params: List[torch.Tensor] = []
-        for param_group in self.optimizer.param_groups:
-            params.extend(param_group["params"])
-
-        params = list(
-            filter(lambda p: p.requires_grad and p.grad is not None, params)
-        )
-        if len(params) > 0:
-            if self.grad_clip_mode == "value":
-                self.accelerator.clip_grad_value_(params, self.grad_clip_value)
-            elif self.grad_clip_mode == "norm":
-                self.accelerator.clip_grad_norm_(
-                    params, self.grad_max_norm, self.grad_norm_type
-                )
+        # self.resume(resume_from)
 
     @torch.no_grad()
     def eval(self) -> Optional[Any]:
