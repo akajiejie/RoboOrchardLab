@@ -97,9 +97,15 @@ class DummyPipelineHook(PipelineHooks):
         print("Checking trainer state...")
         assert self._on_epoch_begin_state is not None
         assert (
-            self._on_epoch_end_state.epoch
-            == self._on_epoch_begin_state.epoch + 1
+            self._on_epoch_end_state.epoch == self._on_epoch_begin_state.epoch
         )
+        # for epoch with step number > 1, the global step should be
+        # different from the epoch step
+        assert (
+            self._on_epoch_end_state.global_step
+            != self._on_epoch_begin_state.global_step
+        )
+        assert self._on_epoch_end_state.step != self._on_epoch_begin_state.step
 
     def on_step_begin(self, args: PipelineHookArgs):
         self._on_step_begin_cnt += 1
@@ -120,13 +126,12 @@ class DummyPipelineHook(PipelineHooks):
         print("Step end. end state: ", self._on_step_end_state)
         print("Checking trainer state...")
         assert self._on_step_begin_state is not None
-        assert (
-            self._on_step_end_state.step == self._on_step_begin_state.step + 1
-        )
+        assert self._on_step_end_state.step == self._on_step_begin_state.step
         assert (
             self._on_step_end_state.global_step
-            == self._on_step_begin_state.global_step + 1
+            == self._on_step_begin_state.global_step
         )
+        assert self._on_step_end_state.epoch == self._on_step_begin_state.epoch
 
 
 class DummyMetric(Metric):
@@ -203,7 +208,10 @@ def test_trainer_initialization(dummy_trainer):
 def test_training_loop(dummy_trainer: SimpleTrainer):
     """Test training loop execution."""
     # Spy on hook methods
+
+    print("Old hook: ", dummy_trainer.hooks)
     hook = DummyPipelineHook()
+    print("New hook: ", hook)
 
     dummy_trainer.hooks = hook
 

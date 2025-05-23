@@ -35,6 +35,7 @@ from robo_orchard_core.utils.hook import (
     HookContextChannel,
     RemoveableHandle,
 )
+from robo_orchard_core.utils.string import add_indentation
 from typing_extensions import Self
 
 from robo_orchard_lab.utils import as_sequence
@@ -137,6 +138,8 @@ PipelineHookChanelType: TypeAlias = Literal[
 
 
 class PipelineHooks:
+    """A class to manage pipeline hooks for training processes."""
+
     def __init__(self):
         self.hooks: dict[
             PipelineHookChanelType, HookContextChannel[PipelineHookArgs]
@@ -227,4 +230,21 @@ class PipelineHooks:
         ret = cls()
         for hook in input_hooks:
             ret += hook
+        return ret
+
+    def __repr__(self) -> str:
+        hook_str = "{"
+        for k, v in self.hooks.items():
+            if len(v) == 0:
+                continue
+            hook_str += "\n" + add_indentation(f"{k}: {v}, ", indent=2)
+        if hook_str != "{":
+            hook_str += "\n"
+        hook_str += "}"
+        content = f"hooks={hook_str}"
+        ret = (
+            f"<{self.__class__.__module__}.{self.__class__.__name__}(\n"
+            + add_indentation(content, indent=2, first_line_indent=True)
+            + ")>"
+        )
         return ret

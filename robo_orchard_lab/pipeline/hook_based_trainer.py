@@ -217,6 +217,22 @@ class HookBasedTrainer:
     manage the training process, allowing for custom hooks to be defined
     for various stages of the training loop.
 
+    The whole training process with hooks is as follows:
+
+    .. code-block:: text
+
+        with on_loop:
+            with on_epoch:
+                for batch in dataloader:
+                    with on_step:
+                        with on_batch:
+                            batch_processor(...)
+                            ...
+
+                        update step id
+            update epoch id
+
+
     Note:
         The trainer will register the following default hooks in order:
 
@@ -392,12 +408,9 @@ class HookBasedTrainer:
                         on_batch_hook_args.model_outputs
                     )
 
-                self.trainer_progress_state.update_step()
-                self.trainer_progress_state.sync_pipeline_hook_arg(
-                    on_step_hook_args
-                )
-
-        with self.hooks.begin("on_loop", self._get_hook_args()):
+        with self.hooks.begin(
+            "on_loop", self._get_hook_args()
+        ) as on_loop_hook_args:
             while not end_loop_flag:
                 # TODO: Synchronize end_loop_flag when different
                 # processes have different batch numbers. !
@@ -417,17 +430,20 @@ class HookBasedTrainer:
                     for _i, batch in enumerate(self.dataloader):
                         # TODO: Support Accelerator.accumulate?
                         step(batch=batch, batch_processor=self.batch_processor)
+                        self.trainer_progress_state.update_step()
+                        self.trainer_progress_state.sync_pipeline_hook_arg(
+                            on_epoch_hook_args
+                        )
                         if self.trainer_progress_state.is_training_end(
                             max_step=self.max_step, max_epoch=self.max_epoch
                         ):
                             end_loop_flag = True
                             break
 
-                    self.trainer_progress_state.update_epoch()
-                    self.trainer_progress_state.sync_pipeline_hook_arg(
-                        on_epoch_hook_args
-                    )
-
+                self.trainer_progress_state.update_epoch()
+                self.trainer_progress_state.sync_pipeline_hook_arg(
+                    on_loop_hook_args
+                )
                 if self.trainer_progress_state.is_training_end(
                     max_step=self.max_step, max_epoch=self.max_epoch
                 ):

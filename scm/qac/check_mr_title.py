@@ -31,9 +31,9 @@ def main():
 
     merge_request_title = os.environ["gitlabMergeRequestTitle"]
 
-    if len(merge_request_title) > 128:
+    if len(merge_request_title) > 180:
         raise ValueError(
-            "The maximum length of merge request title is 128, but get {} for merge request title: {}".format(  # noqa
+            "The maximum length of merge request title is 180, but get {} for merge request title: {}".format(  # noqa
                 len(merge_request_title), merge_request_title
             )
         )

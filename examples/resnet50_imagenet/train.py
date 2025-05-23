@@ -258,7 +258,7 @@ def main(cfg: TrainerConfig):
             DoCheckpoint(save_step_freq=1024),
         ],
     )
-
+    print(trainer.hooks)
     trainer()
 
 
