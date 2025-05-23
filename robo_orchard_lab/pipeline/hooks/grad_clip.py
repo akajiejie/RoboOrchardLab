@@ -22,7 +22,10 @@ from robo_orchard_lab.pipeline.hooks.mixin import (
     HookContext,
     PipelineHookArgs,
     PipelineHooks,
+    PipelineHooksConfig,
 )
+
+__all__ = ["GradientClippingHook", "GradientClippingHookConfig"]
 
 
 class GradientClippingHook(PipelineHooks):
@@ -40,51 +43,19 @@ class GradientClippingHook(PipelineHooks):
 
 
     Args:
-        clip_mode (Literal["norm", "value"]): The mode of gradient clipping.
-            - "norm": Clips gradients by norm.
-            - "value": Clips gradients by value.
-        clip_value (float | None): The value to clip the gradients to. This
-            parameter is only used when `clip_mode` is "value".
-        max_norm (float | None): The maximum norm to clip the gradients to.
-            This parameter is only used when `clip_mode` is "norm".
-        norm_type (float): The type of norm to use for clipping. Default is 2.0
-            (L2 norm).
-
+        cfg (GradientClippingHookConfig): The configuration for the
+            GradientClippingHook.
     """
 
     def __init__(
         self,
-        clip_mode: Literal["norm", "value"],
-        clip_value: float | None = None,
-        max_norm: float | None = None,
-        norm_type: float = 2.0,
+        cfg: GradientClippingHookConfig,
     ):
         super().__init__()
-        if clip_mode == "value":
-            if clip_value is None:
-                raise ValueError(
-                    "clip_value must be specified when clip_mode is 'value'."
-                )
-            if clip_value < 0:
-                raise ValueError(
-                    "clip_value must be non-negative when clip_mode "
-                    "is 'value'."
-                )
-        elif clip_mode == "norm":
-            if max_norm is None:
-                raise ValueError(
-                    "max_norm must be specified when clip_mode is 'norm'."
-                )
-            if max_norm < 0:
-                raise ValueError(
-                    "max_norm must be non-negative when clip_mode is 'norm'."
-                )
-        else:
-            raise ValueError("clip_mode must be either 'norm' or 'value'.")
-        self.clip_mode = clip_mode
-        self.clip_value = clip_value
-        self.max_norm = max_norm
-        self.norm_type = norm_type
+        self.clip_mode = cfg.clip_mode
+        self.clip_value = cfg.clip_value
+        self.max_norm = cfg.max_norm
+        self.norm_type = cfg.norm_type
 
         self.register_hook(
             "on_step",
@@ -128,4 +99,46 @@ class GradientClippingHook(PipelineHooks):
                     params,
                     self.max_norm,
                     self.norm_type,  # type: ignore
+                )
+
+
+class GradientClippingHookConfig(PipelineHooksConfig[GradientClippingHook]):
+    """Configuration class for GradientClippingHook."""
+
+    class_type: type[GradientClippingHook] = GradientClippingHook
+
+    clip_mode: Literal["norm", "value"]
+    """The mode of gradient clipping.
+        - "norm": Clips gradients by norm.
+        - "value": Clips gradients by value.
+    """
+    clip_value: float | None = None
+    """ The maximum norm to clip the gradients to. This parameter
+    is only used when `clip_mode` is "norm"."""
+    max_norm: float | None = None
+    """The maximum norm to clip the gradients to. This parameter is only
+    used when `clip_mode` is "norm"."""
+    norm_type: float = 2.0
+    """The type of norm to use for clipping. Default is 2.0 (L2 norm)."""
+
+    def __post_init__(self) -> None:
+        """Post-initialization method to validate the configuration."""
+        if self.clip_mode == "value":
+            if self.clip_value is None:
+                raise ValueError(
+                    "clip_value must be specified when clip_mode is 'value'."
+                )
+            if self.clip_value < 0:
+                raise ValueError(
+                    "clip_value must be non-negative when clip_mode "
+                    "is 'value'."
+                )
+        elif self.clip_mode == "norm":
+            if self.max_norm is None:
+                raise ValueError(
+                    "max_norm must be specified when clip_mode is 'norm'."
+                )
+            if self.max_norm < 0:
+                raise ValueError(
+                    "max_norm must be non-negative when clip_mode is 'norm'."
                 )

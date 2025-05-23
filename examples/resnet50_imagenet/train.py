@@ -34,10 +34,11 @@ from torchvision import datasets, models, transforms
 from robo_orchard_lab.pipeline import SimpleTrainer
 from robo_orchard_lab.pipeline.batch_processor import SimpleBatchProcessor
 from robo_orchard_lab.pipeline.hooks import (
-    DoCheckpoint,
     MetricEntry,
     MetricTracker,
-    StatsMonitor,
+    MetricTrackerConfig,
+    SaveCheckpointConfig,
+    StatsMonitorConfig,
 )
 from robo_orchard_lab.utils import log_basic_config
 from robo_orchard_lab.utils.huggingface import (
@@ -45,6 +46,21 @@ from robo_orchard_lab.utils.huggingface import (
 )
 
 logger = logging.getLogger(__file__)
+
+
+class MyMetricTracker(MetricTracker):
+    """An example metric tracker."""
+
+    def update_metric(self, batch: Any, model_outputs: Any):
+        _, targets = batch
+        for metric_i in self.metrics:
+            metric_i(model_outputs, targets)
+
+
+class MyMetricTrackerConfig(MetricTrackerConfig):
+    """An example metric tracker config."""
+
+    class_type: type[MetricTracker] = MyMetricTracker
 
 
 class DatasetConfig(SettingConfig):
@@ -181,13 +197,6 @@ class MyBatchProcessor(SimpleBatchProcessor):
         return output, loss
 
 
-class MyMetricTracker(MetricTracker):
-    def update_metric(self, batch: Any, model_outputs: Any):
-        _, targets = batch
-        for metric_i in self.metrics:
-            metric_i(model_outputs, targets)
-
-
 def main(cfg: TrainerConfig):
     train_dataset, val_dataset = cfg.dataset.get_dataset()
     train_dataloader = DataLoader(
@@ -236,7 +245,7 @@ def main(cfg: TrainerConfig):
         batch_processor=MyBatchProcessor(need_backward=True),
         max_epoch=cfg.max_epoch,
         hooks=[
-            MyMetricTracker(
+            MyMetricTrackerConfig(
                 metric_entrys=[
                     MetricEntry(
                         names=["top1_acc"],
@@ -254,8 +263,8 @@ def main(cfg: TrainerConfig):
                 step_log_freq=64,
                 log_main_process_only=False,
             ),
-            StatsMonitor(step_log_freq=64),
-            DoCheckpoint(save_step_freq=1024),
+            StatsMonitorConfig(step_log_freq=64),
+            SaveCheckpointConfig(save_step_freq=1024),
         ],
     )
     print(trainer.hooks)

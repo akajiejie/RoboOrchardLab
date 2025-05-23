@@ -22,7 +22,11 @@ import pytest
 import torch
 from torchmetrics.classification import BinaryAccuracy
 
-from robo_orchard_lab.pipeline.hooks.metric import MetricEntry, MetricTracker
+from robo_orchard_lab.pipeline.hooks.metric import (
+    MetricEntry,
+    MetricTracker,
+    MetricTrackerConfig,
+)
 from robo_orchard_lab.pipeline.hooks.mixin import PipelineHookArgs
 
 
@@ -44,14 +48,15 @@ def mock_metric_entry():
 def mock_metric_tracker(mock_metric_entry):
     """Fixture to create a MetricTracker with a single MetricEntry."""
 
-    return CustomMetricTracker(
+    return MetricTrackerConfig(
+        class_type=CustomMetricTracker,
         metric_entrys=[mock_metric_entry],
         reset_by="epoch",
         reset_freq=1,
         step_log_freq=2,
         epoch_log_freq=1,
         log_main_process_only=True,
-    )
+    )()
 
 
 @pytest.fixture(scope="function")

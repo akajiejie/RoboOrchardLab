@@ -19,7 +19,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from robo_orchard_lab.pipeline.hooks import StatsMonitor
+from robo_orchard_lab.pipeline.hooks import StatsMonitorConfig
 from robo_orchard_lab.pipeline.hooks.mixin import PipelineHookArgs
 
 
@@ -60,9 +60,9 @@ def mock_hook_args(mock_accelerator, mock_dataloader):
 
 def test_stats_monitor_initialization():
     """Test StatsMonitor initialization."""
-    monitor = StatsMonitor(
+    monitor = StatsMonitorConfig(
         batch_size=32, steps_per_epoch=100, step_log_freq=10, epoch_log_freq=1
-    )
+    )()
     assert monitor.batch_size == 32
     assert monitor.steps_per_epoch == 100
     assert monitor.step_log_freq == 10
@@ -71,7 +71,7 @@ def test_stats_monitor_initialization():
 
 def test_estimate_data_stats(mock_accelerator, mock_dataloader):
     """Test data statistics estimation."""
-    monitor = StatsMonitor()
+    monitor = StatsMonitorConfig()()
     monitor._estimate_data_stats(mock_accelerator, mock_dataloader)
     assert monitor.batch_size == 32
     assert monitor.total_batch_size == 32 * 4
@@ -80,7 +80,7 @@ def test_estimate_data_stats(mock_accelerator, mock_dataloader):
 
 def test_estimate_remaining_time():
     """Test remaining time estimation."""
-    monitor = StatsMonitor()
+    monitor = StatsMonitorConfig()()
     elapsed_time = 60  # 60 seconds
     current_step = 50
     current_epoch = 1
@@ -107,9 +107,9 @@ def test_on_step_end(mocker, mock_hook_args):
     """Test the on_step_end method."""
     mock_logger = mocker.patch("robo_orchard_lab.pipeline.hooks.stats.logger")
 
-    monitor = StatsMonitor(
+    monitor = StatsMonitorConfig(
         batch_size=32, steps_per_epoch=100, step_log_freq=10
-    )
+    )()
     monitor._start_time = time.time() - 60  # Simulate 1 minute elapsed
     monitor.total_batch_size = 32 * 4
     monitor._step_start_time = (
@@ -132,9 +132,9 @@ def test_on_epoch_end(mocker, mock_hook_args):
     """Test the on_epoch_end method."""
     mock_logger = mocker.patch("robo_orchard_lab.pipeline.hooks.stats.logger")
 
-    monitor = StatsMonitor(
+    monitor = StatsMonitorConfig(
         batch_size=32, steps_per_epoch=100, epoch_log_freq=1
-    )
+    )()
 
     with monitor.begin("on_epoch", mock_hook_args) as monitor_hook_args:
         monitor._start_time = time.time() - 300  # Simulate 5 minutes elapsed

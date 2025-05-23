@@ -13,7 +13,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
 # implied. See the License for the specific language governing
 # permissions and limitations under the License.
-
+from __future__ import annotations
 import logging
 from typing import Optional
 
@@ -23,68 +23,36 @@ from robo_orchard_lab.pipeline.hooks.mixin import (
     HookContext,
     PipelineHookArgs,
     PipelineHooks,
+    PipelineHooksConfig,
 )
 
-__all__ = ["DoCheckpoint"]
+__all__ = ["SaveCheckpoint", "SaveCheckpointConfig"]
 
 
 logger = logging.getLogger(__file__)
 
 
-class DoCheckpoint(PipelineHooks):
+class SaveCheckpoint(PipelineHooks):
     """Checkpoint hook.
 
     A checkpointing hook for saving model state at specified epoch or
     step intervals.
 
-    Attributes:
-        save_root (Optional[str]): The root directory where checkpoints
-            are saved.
-        save_epoch_freq (Optional[int]): Frequency of saving checkpoints
-            based on epochs.
-        save_step_freq (Optional[int]): Frequency of saving checkpoints
-            based on steps.
+
+    Args:
+        cfg (SaveCheckpointConfig): Configuration object containing
+            parameters for checkpointing.
+
     """
 
     def __init__(
         self,
-        save_root: Optional[str] = None,
-        save_epoch_freq: Optional[int] = 1,
-        save_step_freq: Optional[int] = None,
+        cfg: SaveCheckpointConfig,
     ):
-        """Initializes the DoCheckpoint hook.
-
-        Args:
-            save_root (Optional[str]): The root directory where checkpoints
-                are saved.
-            save_epoch_freq (Optional[int]): The frequency (in epochs) to
-                save checkpoints.
-            save_step_freq (Optional[int]): The frequency (in steps) to
-                save checkpoints.
-
-        Raises:
-            ValueError: If both save_epoch_freq and save_step_freq are None,
-                or if either is set to a value less than 1.
-        """
         super().__init__()
-        if save_epoch_freq is None and save_step_freq is None:
-            raise ValueError(
-                "Either `save_epoch_freq` or `save_step_freq` must be specified. Both cannot be None."  # noqa: E501
-            )
-        if save_epoch_freq is not None and save_epoch_freq < 1:
-            raise ValueError(
-                "save_epoch_freq = {} < 1 is not allowed".format(
-                    save_epoch_freq
-                )
-            )
-        if save_step_freq is not None and save_step_freq < 1:
-            raise ValueError(
-                "save_step_freq = {} < 1 is not allowed".format(save_step_freq)
-            )
-
-        self.save_root = save_root
-        self.save_epoch_freq = save_epoch_freq
-        self.save_step_freq = save_step_freq
+        self.save_root = cfg.save_root
+        self.save_epoch_freq = cfg.save_epoch_freq
+        self.save_step_freq = cfg.save_step_freq
         self._is_checked = False
 
         self.register_hook(
@@ -169,5 +137,38 @@ class DoCheckpoint(PipelineHooks):
             logger.info(
                 "Save checkpoint at the end of epoch {} to {}".format(
                     args.epoch_id, save_location
+                )
+            )
+
+
+class SaveCheckpointConfig(PipelineHooksConfig[SaveCheckpoint]):
+    """Configuration class for SaveCheckpoint."""
+
+    class_type: type[SaveCheckpoint] = SaveCheckpoint
+
+    save_root: Optional[str] = None
+    """The root directory where checkpoints are saved."""
+
+    save_epoch_freq: Optional[int] = 1
+    """Frequency of saving checkpoints based on epochs."""
+
+    save_step_freq: Optional[int] = None
+    """Frequency of saving checkpoints based on steps."""
+
+    def __post_init__(self):
+        if self.save_epoch_freq is None and self.save_step_freq is None:
+            raise ValueError(
+                "Either `save_epoch_freq` or `save_step_freq` must be specified. Both cannot be None."  # noqa: E501
+            )
+        if self.save_epoch_freq is not None and self.save_epoch_freq < 1:
+            raise ValueError(
+                "save_epoch_freq = {} < 1 is not allowed".format(
+                    self.save_epoch_freq
+                )
+            )
+        if self.save_step_freq is not None and self.save_step_freq < 1:
+            raise ValueError(
+                "save_step_freq = {} < 1 is not allowed".format(
+                    self.save_step_freq
                 )
             )

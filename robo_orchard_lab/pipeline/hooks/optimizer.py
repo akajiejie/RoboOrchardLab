@@ -13,12 +13,13 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
 # implied. See the License for the specific language governing
 # permissions and limitations under the License.
-
+from __future__ import annotations
 
 from robo_orchard_lab.pipeline.hooks.mixin import (
     HookContext,
     PipelineHookArgs,
     PipelineHooks,
+    PipelineHooksConfig,
 )
 
 
@@ -31,7 +32,7 @@ class OptimizerHook(PipelineHooks):
 
     """
 
-    def __init__(self):
+    def __init__(self, cfg: OptimizerHookConfig | None):
         super().__init__()
         self.register_hook(
             "on_step",
@@ -66,3 +67,7 @@ class OptimizerHook(PipelineHooks):
         hook_args.optimizer.step()
         hook_args.lr_scheduler.step()
         hook_args.optimizer.zero_grad()
+
+
+class OptimizerHookConfig(PipelineHooksConfig[OptimizerHook]):
+    class_type: type[OptimizerHook] = OptimizerHook

@@ -27,10 +27,11 @@ from torch.utils.data import DataLoader
 
 from robo_orchard_lab.pipeline.batch_processor.mixin import BatchProcessorMixin
 from robo_orchard_lab.pipeline.hook_based_trainer import (
-    GradClipConfig,
+    GradientClippingHookConfig as GradClipConfig,
     HookBasedTrainer,
+    PipelineHookOrConfigType,
     ResumeCheckpointConfig,
-    ValidationConfig,
+    ValidationHookConfig as ValidationConfig,
 )
 from robo_orchard_lab.pipeline.hooks.mixin import (
     PipelineHookArgs,
@@ -181,7 +182,9 @@ class SimpleTrainer(HookBasedTrainer):
         grad_clip_value: Optional[float] = None,
         grad_max_norm: Optional[float] = None,
         grad_norm_type: int = 2,
-        hooks: PipelineHooks | Iterable[PipelineHooks] | None = None,
+        hooks: PipelineHookOrConfigType
+        | Iterable[PipelineHookOrConfigType]
+        | None = None,
     ):
         # make sure that lr_scheduler_step_at is always "step" or "epoch"
         assert lr_scheduler_step_at in [

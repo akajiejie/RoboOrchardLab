@@ -22,7 +22,6 @@ from typing import (
     Iterable,
     Literal,
     Optional,
-    Sequence,
     Type,
     TypeAlias,
 )
@@ -30,15 +29,17 @@ from typing import (
 import torch
 from accelerate import Accelerator
 from accelerate.scheduler import AcceleratedScheduler
+from robo_orchard_core.utils.config import (
+    ClassConfig,
+    ClassInitFromConfigMixin,
+)
 from robo_orchard_core.utils.hook import (
     HookContext,
     HookContextChannel,
     RemoveableHandle,
 )
 from robo_orchard_core.utils.string import add_indentation
-from typing_extensions import Self
-
-from robo_orchard_lab.utils import as_sequence
+from typing_extensions import Self, TypeVar
 
 __all__ = [
     "PipelineHooks",
@@ -46,6 +47,7 @@ __all__ = [
     "PipelineHookChanelType",
     "HookContext",
     "HookContextChannel",
+    "PipelineHooksConfig",
 ]
 
 
@@ -137,10 +139,14 @@ PipelineHookChanelType: TypeAlias = Literal[
 ]
 
 
-class PipelineHooks:
-    """A class to manage pipeline hooks for training processes."""
+class PipelineHooks(ClassInitFromConfigMixin):
+    """A class to manage pipeline hooks for training processes.
 
-    def __init__(self):
+    This class only accept config class as input for the constructor.
+
+    """
+
+    def __init__(self, cfg: PipelineHooksConfig | None = None):
         self.hooks: dict[
             PipelineHookChanelType, HookContextChannel[PipelineHookArgs]
         ] = {}
@@ -211,7 +217,10 @@ class PipelineHooks:
     @classmethod
     def from_hooks(
         cls: Type[Self],
-        hooks: Self | Iterable[Self] | None,
+        hooks: Self
+        | PipelineHooksConfig
+        | Iterable[Self | PipelineHooksConfig]
+        | None,
     ) -> Self:
         """Create a new instance of the class from a list of hooks.
 
@@ -222,11 +231,27 @@ class PipelineHooks:
             Self: A new instance of the class with the registered hooks.
         """
 
-        input_hooks: Sequence[PipelineHooks] = as_sequence(
-            hooks,
-            check_type=True,
-            required_types=PipelineHooks,
-        )
+        if hooks is None:
+            return cls()
+
+        if isinstance(hooks, (PipelineHooksConfig, PipelineHooks)):
+            hooks_or_cfg_: list[PipelineHooks | PipelineHooksConfig] = [hooks]
+        else:
+            hooks_or_cfg_ = hooks  # type: ignore
+
+        input_hooks: list[PipelineHooks] = []
+        for hook_or_cfg in hooks_or_cfg_:
+            if isinstance(hook_or_cfg, PipelineHooksConfig):
+                hook = hook_or_cfg()
+            elif isinstance(hook_or_cfg, PipelineHooks):
+                hook = hook_or_cfg
+            else:
+                raise TypeError(
+                    f"Expected PipelineHooks or PipelineHooksConfig, "
+                    f"but got {type(hook_or_cfg)}"
+                )
+            input_hooks.append(hook)
+
         ret = cls()
         for hook in input_hooks:
             ret += hook
@@ -248,3 +273,14 @@ class PipelineHooks:
             + ")>"
         )
         return ret
+
+
+PipelineHooksType_co = TypeVar(
+    "PipelineHooksType_co",
+    bound=PipelineHooks,
+    covariant=True,
+)
+
+
+class PipelineHooksConfig(ClassConfig[PipelineHooksType_co]):
+    pass

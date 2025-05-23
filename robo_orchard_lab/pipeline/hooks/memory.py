@@ -13,62 +13,46 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
 # implied. See the License for the specific language governing
 # permissions and limitations under the License.
-
+from __future__ import annotations
 from typing import Literal
 
-import torch
+from accelerate.utils.memory import clear_device_cache
 
 from robo_orchard_lab.pipeline.hooks.mixin import (
     HookContext,
     PipelineHookArgs,
     PipelineHooks,
+    PipelineHooksConfig,
 )
 
-__all__ = ["CUDAMemoryManager"]
+__all__ = ["ClearCacheHook", "ClearCacheHookConfig"]
 
 
-class CUDAMemoryManager(PipelineHooks):
-    """A CUDA memory manager to periodically release cached GPU memory.
+class ClearCacheHook(PipelineHooks):
+    """A Hook to periodically release cached device memory.
 
     This class is designed to work with training pipelines that use hooks
     for step and epoch management. It integrates with PyTorch's
-    `torch.cuda.empty_cache()` to clear unused memory, helping to avoid
-    out-of-memory (OOM) errors during long-running training loops.
-
-    Attributes:
-        empty_cache_at (str): When to empty the CUDA cache. Either "step" or
-            "epoch".
-        empty_cache_freq (int): Frequency of cache clearing based on the
-            specified granularity.
+    `accelerate.utils.memory.clear_device_cache()` to clear unused memory,
+    helping to avoid out-of-memory (OOM) errors during
+    long-running training loops.
 
     Args:
-        empty_cache_at (Literal["step", "epoch"], optional):
-            Specifies whether to clear the cache at the end of each step or
-            epoch. Default is "epoch".
-        empty_cache_freq (int, optional):
-            The frequency of cache clearing. For example:
-            - If `empty_cache_at="step"`, this clears the cache every
-            `empty_cache_freq` steps.
-            - If `empty_cache_at="epoch"`, this clears the cache every
-            `empty_cache_freq` epochs. Default is 1 (clear after every step
-            or epoch).
+        cfg (ClearCacheHookConfig): Configuration for the ClearCacheHook.
 
-    Methods:
-        on_step_end: Clears the CUDA cache at the end of a step
-            if conditions are met.
-        on_epoch_end: Clears the CUDA cache at the end of an epoch if
-            conditions are met.
 
     Examples:
         Basic Usage:
             >>> from robo_orchard_lab.pipeline.hooks.mixin import (
             ...     PipelineHookArgs,
             ... )
-            >>> from robo_orchard_lab.pipeline.memory import CUDAMemoryManager
+            >>> from robo_orchard_lab.pipeline.memory import (
+            ...     ClearCacheHookConfig,
+            ... )
             >>>
-            >>> memory_manager = CUDAMemoryManager(
+            >>> memory_manager = ClearCacheHookConfig(
             >>>     empty_cache_at="step", empty_cache_freq=10
-            >>> )
+            >>> )()
             >>> # Simulate a training step
             >>> hook_args = PipelineHookArgs(global_step_id=9, epoch_id=0)
             >>> with memory_manager.begin("on_step", hook_args) as hook_args:
@@ -76,9 +60,9 @@ class CUDAMemoryManager(PipelineHooks):
             # Clears the cache after 10 steps
 
         Epoch-Based Clearing:
-            >>> memory_manager = CUDAMemoryManager(
+            >>> memory_manager = ClearCacheHookConfig(
             >>>     empty_cache_at="epoch", empty_cache_freq=2
-            >>> )
+            >>> )()
             >>> # Simulate the end of an epoch
             >>> hook_args = PipelineHookArgs(global_step_id=99, epoch_id=1)
             >>> with memory_manager.begin("on_epoch", hook_args) as hook_args:
@@ -88,22 +72,12 @@ class CUDAMemoryManager(PipelineHooks):
 
     def __init__(
         self,
-        empty_cache_at: Literal["step", "epoch"] = "epoch",
-        empty_cache_freq: int = 1,
+        cfg: ClearCacheHookConfig,
     ):
-        """Initializes the CUDA memory manager.
-
-        Args:
-            empty_cache_at (Literal["step", "epoch"], optional):
-                Specifies whether to clear the cache at the end of each
-                step or epoch. Default is "epoch".
-            empty_cache_freq (int, optional):
-                The frequency of cache clearing based on the specified
-                granularity. Default is 1 (clear every step or epoch).
-        """
         super().__init__()
-        self.empty_cache_at = empty_cache_at
-        self.empty_cache_freq = empty_cache_freq
+        self.empty_cache_at = cfg.empty_cache_at
+        self.empty_cache_freq = cfg.empty_cache_freq
+        self.garbage_collection = cfg.garbage_collection
 
         self.register_hook(
             "on_step", hook=HookContext.from_callable(after=self._on_step_end)
@@ -128,8 +102,7 @@ class CUDAMemoryManager(PipelineHooks):
             self.empty_cache_at == "step"
             and (arg.global_step_id + 1) % self.empty_cache_freq == 0
         ):
-            if torch.cuda.is_available():
-                torch.cuda.empty_cache()
+            clear_device_cache(garbage_collection=self.garbage_collection)
 
     def _on_epoch_end(self, arg: PipelineHookArgs) -> None:
         """Hook invoked at the end of a training epoch.
@@ -146,5 +119,26 @@ class CUDAMemoryManager(PipelineHooks):
             self.empty_cache_at == "epoch"
             and (arg.epoch_id + 1) % self.empty_cache_freq == 0
         ):
-            if torch.cuda.is_available():
-                torch.cuda.empty_cache()
+            clear_device_cache(garbage_collection=self.garbage_collection)
+
+
+class ClearCacheHookConfig(PipelineHooksConfig[ClearCacheHook]):
+    """Configuration class for ClearCacheHook."""
+
+    class_type: type[ClearCacheHook] = ClearCacheHook
+
+    empty_cache_at: Literal["step", "epoch"] = "epoch"
+    """Specifies whether to clear the cache at the end of each step or
+    epoch. Default is "epoch"."""
+
+    empty_cache_freq: int = 1
+    """The frequency of cache clearing. For example:
+        - If `empty_cache_at="step"`, this clears the cache every
+        `empty_cache_freq` steps.
+        - If `empty_cache_at="epoch"`, this clears the cache every
+        `empty_cache_freq` epochs. Default is 1 (clear after every step
+        or epoch).
+    """
+
+    garbage_collection: bool = False
+    """Whether to perform garbage collection before clearing the cache."""

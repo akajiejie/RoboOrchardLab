@@ -13,7 +13,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
 # implied. See the License for the specific language governing
 # permissions and limitations under the License.
-
+from __future__ import annotations
 import logging
 from abc import abstractmethod
 from dataclasses import dataclass
@@ -23,7 +23,6 @@ from typing import (
     Literal,
     Sequence,
     Tuple,
-    Union,
 )
 
 from torchmetrics import Metric
@@ -32,10 +31,11 @@ from robo_orchard_lab.pipeline.hooks.mixin import (
     HookContext,
     PipelineHookArgs,
     PipelineHooks,
+    PipelineHooksConfig,
 )
 from robo_orchard_lab.utils import as_sequence
 
-__all__ = ["MetricEntry", "MetricTracker"]
+__all__ = ["MetricEntry", "MetricTracker", "MetricTrackerConfig"]
 
 logger = logging.getLogger(__file__)
 
@@ -80,34 +80,16 @@ class MetricEntry:
 
 
 class MetricTracker(PipelineHooks):
-    """A hook for updating and logging metrics.
-
-    Attributes:
-        metric_entrys (Sequence[MetricEntry]): A sequence of MetricEntry
-            instances.
-        reset_by (Literal["epoch", "step"]): Frequency basis for metric
-            reset ("epoch" or "step").
-        reset_freq (int): Frequency to reset metrics.
-        step_log_freq (int): Frequency of logging at the step level.
-        epoch_log_freq (int): Frequency of logging at the epoch level.
-        log_main_process_only (int): Only logging in the main processor or not.
-
-
-    """
+    """A hook for updating and logging metrics."""
 
     def __init__(
         self,
-        metric_entrys: Union[MetricEntry, Sequence[MetricEntry]],
-        reset_by: Literal["epoch", "step"] = "epoch",
-        reset_freq: int = 1,
-        step_log_freq: int = 512,
-        epoch_log_freq: int = 1,
-        log_main_process_only: bool = True,
+        cfg: MetricTrackerConfig,
     ) -> None:
         """Initialization.
 
         Args:
-            metric_entrys (Union[MetricEntry, Sequence[MetricEntry]]): Single
+            metric_entrys (MetricEntry|Sequence[MetricEntry]): Single
                 or multiple metric entries to update.
             reset_by (Literal["epoch", "step"], optional): Basis for resetting
                 metrics; either "epoch" or "step".
@@ -121,13 +103,15 @@ class MetricTracker(PipelineHooks):
                 processor or not. Defaults to True.
         """
         super().__init__()
-        self.metric_entrys: Sequence[MetricEntry] = as_sequence(metric_entrys)
+        self.metric_entrys: Sequence[MetricEntry] = as_sequence(
+            cfg.metric_entrys
+        )
         self.metrics = [entry_i.metric for entry_i in self.metric_entrys]
-        self.reset_by = reset_by
-        self.reset_freq = reset_freq
-        self.step_log_freq = step_log_freq
-        self.epoch_log_freq = epoch_log_freq
-        self.log_main_process_only = log_main_process_only
+        self.reset_by = cfg.reset_by
+        self.reset_freq = cfg.reset_freq
+        self.step_log_freq = cfg.step_log_freq
+        self.epoch_log_freq = cfg.epoch_log_freq
+        self.log_main_process_only = cfg.log_main_process_only
 
         self._reset()
 
@@ -271,3 +255,20 @@ class MetricTracker(PipelineHooks):
             and (args.epoch_id + 1) % self.reset_freq == 0
         ):
             self._reset()
+
+
+class MetricTrackerConfig(PipelineHooksConfig[MetricTracker]):
+    class_type: type[MetricTracker] = MetricTracker
+
+    metric_entrys: Sequence[MetricEntry] | MetricEntry
+    """Single or multiple metric entries to update."""
+    reset_by: Literal["epoch", "step"] = "epoch"
+    """Frequency basis for metric reset ("epoch" or "step")."""
+    reset_freq: int = 1
+    """Frequency to reset metrics."""
+    step_log_freq: int = 512
+    """Frequency of logging at the step level."""
+    epoch_log_freq: int = 1
+    """Frequency of logging at the epoch level."""
+    log_main_process_only: bool = True
+    """Only logging in the main processor or not."""

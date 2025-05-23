@@ -13,13 +13,14 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
 # implied. See the License for the specific language governing
 # permissions and limitations under the License.
-
+from __future__ import annotations
 from typing import Callable
 
 from robo_orchard_lab.pipeline.hooks.mixin import (
     HookContext,
     PipelineHookArgs,
     PipelineHooks,
+    PipelineHooksConfig,
 )
 
 
@@ -46,39 +47,21 @@ class ValidationHook(PipelineHooks):
 
     def __init__(
         self,
-        eval_callback: Callable[[], None],
-        step_eval_freq: int | None = None,
-        epoch_eval_freq: int | None = None,
+        cfg: ValidationHookConfig,
     ):
-        if step_eval_freq is None and epoch_eval_freq is None:
-            raise ValueError(
-                "Either `step_eval_freq` or `epoch_eval_freq` "
-                "must be specified."
-            )
-        if step_eval_freq is not None and step_eval_freq < 1:
-            raise ValueError(
-                "step_eval_freq = {} < 1 is not allowed".format(step_eval_freq)
-            )
-        if epoch_eval_freq is not None and epoch_eval_freq < 1:
-            raise ValueError(
-                "epoch_eval_freq = {} < 1 is not allowed".format(
-                    self.epoch_eval_freq
-                )
-            )
-
         super().__init__()
-        self.eval_callback = eval_callback
-        self.step_eval_freq = step_eval_freq
-        self.epoch_eval_freq = epoch_eval_freq
+        self.eval_callback = cfg.eval_callback
+        self.step_eval_freq = cfg.step_eval_freq
+        self.epoch_eval_freq = cfg.epoch_eval_freq
 
-        if epoch_eval_freq is not None:
+        if cfg.epoch_eval_freq is not None:
             self.register_hook(
                 "on_epoch",
                 HookContext.from_callable(
                     after=self._on_epoch_end, before=None
                 ),
             )
-        if step_eval_freq is not None:
+        if cfg.step_eval_freq is not None:
             self.register_hook(
                 "on_step",
                 HookContext.from_callable(
@@ -145,3 +128,40 @@ class ValidationHook(PipelineHooks):
             return True
 
         return False
+
+
+class ValidationHookConfig(PipelineHooksConfig[ValidationHook]):
+    """Configuration class for ValidationHook."""
+
+    class_type: type[ValidationHook] = ValidationHook
+
+    eval_callback: Callable[[], None]
+    """A callback function to be called for evaluation. This function should
+    not take no argument and should not return any values. A common use case
+    is to pass a closure that performs the evaluation.
+    """
+    step_eval_freq: int | None = None
+    """The frequency of evaluation in terms of  steps. If specified,
+    the evaluation will be performed every `step_eval_freq` steps."""
+    epoch_eval_freq: int | None = None
+    """The frequency of evaluation in terms of epochs. If specified, the
+    evaluation will be performed every `epoch_eval_freq` epochs."""
+
+    def __post_init__(self):
+        if self.step_eval_freq is None and self.epoch_eval_freq is None:
+            raise ValueError(
+                "Either `step_eval_freq` or `epoch_eval_freq` "
+                "must be specified."
+            )
+        if self.step_eval_freq is not None and self.step_eval_freq < 1:
+            raise ValueError(
+                "step_eval_freq = {} < 1 is not allowed".format(
+                    self.step_eval_freq
+                )
+            )
+        if self.epoch_eval_freq is not None and self.epoch_eval_freq < 1:
+            raise ValueError(
+                "epoch_eval_freq = {} < 1 is not allowed".format(
+                    self.epoch_eval_freq
+                )
+            )

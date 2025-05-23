@@ -15,7 +15,7 @@
 # permissions and limitations under the License.
 
 from dataclasses import dataclass
-from typing import Any, Callable, Iterable, Literal
+from typing import Any, Iterable
 
 import torch
 from accelerate import Accelerator
@@ -26,13 +26,16 @@ from robo_orchard_core.utils.config import Config
 from torch.utils.data import DataLoader
 
 from robo_orchard_lab.pipeline.batch_processor.mixin import BatchProcessorMixin
-from robo_orchard_lab.pipeline.hooks.grad_clip import GradientClippingHook
+from robo_orchard_lab.pipeline.hooks.grad_clip import (
+    GradientClippingHookConfig,
+)
 from robo_orchard_lab.pipeline.hooks.mixin import (
     PipelineHookArgs,
     PipelineHooks,
+    PipelineHooksConfig,
 )
-from robo_orchard_lab.pipeline.hooks.optimizer import OptimizerHook
-from robo_orchard_lab.pipeline.hooks.validation import ValidationHook
+from robo_orchard_lab.pipeline.hooks.optimizer import OptimizerHookConfig
+from robo_orchard_lab.pipeline.hooks.validation import ValidationHookConfig
 from robo_orchard_lab.utils.huggingface import (
     AcceleratorState,
     accelerator_load_state,
@@ -40,7 +43,12 @@ from robo_orchard_lab.utils.huggingface import (
 
 logger = get_logger(__file__)
 
-__all__ = ["HookBasedTrainer", "GradClipConfig", "ValidationConfig"]
+__all__ = [
+    "HookBasedTrainer",
+    "GradientClippingHookConfig",
+    "ValidationHookConfig",
+    "PipelineHookOrConfigType",
+]
 
 
 @dataclass
@@ -106,73 +114,6 @@ class TrainerProgressState(AcceleratorState):
         hook_args.global_step_id = self.global_step_id
 
 
-class GradClipConfig(Config):
-    """A configuration class for gradient clipping."""
-
-    clip_mode: Literal["value", "norm"]
-    """The mode for gradient clipping."""
-
-    clip_value: None | float = None
-    """The value for gradient clipping."""
-    max_norm: None | float = None
-    """The maximum norm for gradient clipping."""
-    norm_type: int = 2
-    """The type of norm to use for gradient clipping."""
-
-    def create_hook(self) -> GradientClippingHook:
-        """Converts the configuration to a GradientClippingHook.
-
-        Returns:
-            GradientClippingHook: The gradient clipping hook.
-        """
-        return GradientClippingHook(
-            clip_mode=self.clip_mode,
-            clip_value=self.clip_value,
-            max_norm=self.max_norm,
-            norm_type=self.norm_type,
-        )
-
-
-class ValidationConfig(Config):
-    eval_callback: Callable[[], None]
-    """The callback function to be called for evaluation."""
-    step_eval_freq: int | None = None
-    """The frequency of evaluation based on steps."""
-    epoch_eval_freq: int | None = None
-    """The frequency of evaluation based on epochs."""
-
-    def __post_init__(self):
-        if self.step_eval_freq is None and self.epoch_eval_freq is None:
-            raise ValueError(
-                "Either `step_eval_freq` or `epoch_eval_freq` "
-                "must be specified."
-            )
-        if self.step_eval_freq is not None and self.step_eval_freq < 1:
-            raise ValueError(
-                "step_eval_freq = {} < 1 is not allowed".format(
-                    self.step_eval_freq
-                )
-            )
-        if self.epoch_eval_freq is not None and self.epoch_eval_freq < 1:
-            raise ValueError(
-                "epoch_eval_freq = {} < 1 is not allowed".format(
-                    self.epoch_eval_freq
-                )
-            )
-
-    def create_hook(self) -> ValidationHook:
-        """Converts the configuration to a ValidationHook.
-
-        Returns:
-            ValidationHook: The validation hook.
-        """
-        return ValidationHook(
-            eval_callback=self.eval_callback,
-            step_eval_freq=self.step_eval_freq,
-            epoch_eval_freq=self.epoch_eval_freq,
-        )
-
-
 class ResumeCheckpointConfig(Config):
     """A configuration class for resuming from checkpoints."""
 
@@ -206,6 +147,9 @@ class ResumeCheckpointConfig(Config):
             safe_serialization=self.safe_serialization,
             **kwargs,
         )
+
+
+PipelineHookOrConfigType = PipelineHooksConfig | PipelineHooks
 
 
 class HookBasedTrainer:
@@ -287,11 +231,11 @@ class HookBasedTrainer:
         batch_processor: BatchProcessorMixin,
         optimizer: torch.optim.Optimizer,
         lr_scheduler: torch.optim.lr_scheduler.LRScheduler,
-        hooks: PipelineHooks | Iterable[PipelineHooks],
-        grad_clip: GradClipConfig | None = None,
+        hooks: PipelineHookOrConfigType | Iterable[PipelineHookOrConfigType],
+        grad_clip: GradientClippingHookConfig | None = None,
         max_step: int | None = None,
         max_epoch: int | None = None,
-        validation: ValidationConfig | None = None,
+        validation: ValidationHookConfig | None = None,
         resume_from: ResumeCheckpointConfig | None = None,
     ):
         if max_step is None and max_epoch is None:
@@ -327,11 +271,11 @@ class HookBasedTrainer:
         self.hooks = PipelineHooks()
         # register default hooks: grad_clip, optimizer, validation
         if grad_clip is not None:
-            self.hooks += grad_clip.create_hook()
+            self.hooks += grad_clip()
 
-        self.hooks += OptimizerHook()
+        self.hooks += OptimizerHookConfig()()
         if validation is not None:
-            self.hooks += validation.create_hook()
+            self.hooks += validation()
 
         # register user hooks
         self.hooks += user_hooks

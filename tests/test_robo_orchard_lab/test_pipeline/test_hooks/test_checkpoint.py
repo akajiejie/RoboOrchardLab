@@ -19,7 +19,7 @@ from unittest.mock import MagicMock
 import pytest
 from accelerate import Accelerator
 
-from robo_orchard_lab.pipeline.hooks.checkpoint import DoCheckpoint
+from robo_orchard_lab.pipeline.hooks.checkpoint import SaveCheckpointConfig
 from robo_orchard_lab.pipeline.hooks.mixin import PipelineHookArgs
 
 
@@ -48,9 +48,9 @@ def test_checkpoint_init_valid():
     Test that the DoCheckpoint hook initializes correctly with
     valid parameters.
     """
-    hook = DoCheckpoint(
+    hook = SaveCheckpointConfig(
         save_root="checkpoints", save_epoch_freq=1, save_step_freq=10
-    )
+    )()
     assert hook.save_root == "checkpoints"
     assert hook.save_epoch_freq == 1
     assert hook.save_step_freq == 10
@@ -59,11 +59,13 @@ def test_checkpoint_init_valid():
 def test_checkpoint_init_invalid():
     """Test that invalid initialization parameters raise ValueError."""
     with pytest.raises(ValueError):
-        DoCheckpoint(save_root=None, save_epoch_freq=None, save_step_freq=None)
+        SaveCheckpointConfig(
+            save_root=None, save_epoch_freq=None, save_step_freq=None
+        )
     with pytest.raises(ValueError):
-        DoCheckpoint(save_root="checkpoints", save_epoch_freq=0)
+        SaveCheckpointConfig(save_root="checkpoints", save_epoch_freq=0)
     with pytest.raises(ValueError):
-        DoCheckpoint(save_root="checkpoints", save_step_freq=0)
+        SaveCheckpointConfig(save_root="checkpoints", save_step_freq=0)
 
 
 def test_on_step_end(mocker, mock_accelerator):
@@ -72,7 +74,7 @@ def test_on_step_end(mocker, mock_accelerator):
         "robo_orchard_lab.pipeline.hooks.checkpoint.logger"
     )
 
-    hook = DoCheckpoint(save_root="checkpoints", save_step_freq=2)
+    hook = SaveCheckpointConfig(save_root="checkpoints", save_step_freq=2)()
 
     args = PipelineHookArgs(
         accelerator=mock_accelerator,
@@ -96,7 +98,7 @@ def test_on_epoch_end(mocker, mock_accelerator):
         "robo_orchard_lab.pipeline.hooks.checkpoint.logger"
     )
 
-    hook = DoCheckpoint(save_root="checkpoints", save_epoch_freq=2)
+    hook = SaveCheckpointConfig(save_root="checkpoints", save_epoch_freq=2)()
 
     args = PipelineHookArgs(
         accelerator=mock_accelerator,
@@ -122,7 +124,7 @@ def test_skip_checkpoint_on_step(mocker, mock_accelerator):
         "robo_orchard_lab.pipeline.hooks.checkpoint.logger"
     )
 
-    hook = DoCheckpoint(save_root="checkpoints", save_step_freq=5)
+    hook = SaveCheckpointConfig(save_root="checkpoints", save_step_freq=5)()
 
     args = PipelineHookArgs(
         accelerator=mock_accelerator,
@@ -146,7 +148,7 @@ def test_skip_checkpoint_on_epoch(mocker, mock_accelerator):
         "robo_orchard_lab.pipeline.hooks.checkpoint.logger"
     )
 
-    hook = DoCheckpoint(save_root="checkpoints", save_epoch_freq=3)
+    hook = SaveCheckpointConfig(save_root="checkpoints", save_epoch_freq=3)()
 
     args = PipelineHookArgs(
         accelerator=mock_accelerator,

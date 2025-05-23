@@ -13,7 +13,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
 # implied. See the License for the specific language governing
 # permissions and limitations under the License.
-
+from __future__ import annotations
 import datetime
 import logging
 import time
@@ -26,9 +26,10 @@ from robo_orchard_lab.pipeline.hooks.mixin import (
     HookContext,
     PipelineHookArgs,
     PipelineHooks,
+    PipelineHooksConfig,
 )
 
-__all__ = ["StatsMonitor"]
+__all__ = ["StatsMonitor", "StatsMonitorConfig"]
 
 
 logger = logging.getLogger(__file__)
@@ -40,13 +41,7 @@ class StatsMonitor(PipelineHooks):
     Including training speed, estimated time remaining, learning rate.
     """
 
-    def __init__(
-        self,
-        batch_size: Optional[int] = None,
-        steps_per_epoch: Optional[int] = None,
-        step_log_freq: int = 512,
-        epoch_log_freq: int = 1,
-    ):
+    def __init__(self, cfg: StatsMonitorConfig):
         """Initializes the StatsMonitor hook.
 
         Args:
@@ -60,11 +55,11 @@ class StatsMonitor(PipelineHooks):
                 Logs are output every `epoch_log_freq` epochs.
         """
         super().__init__()
-        self.batch_size = batch_size
-        self.steps_per_epoch = steps_per_epoch
+        self.batch_size = cfg.batch_size
+        self.steps_per_epoch = cfg.steps_per_epoch
 
-        self.step_log_freq = step_log_freq
-        self.epoch_log_freq = epoch_log_freq
+        self.step_log_freq = cfg.step_log_freq
+        self.epoch_log_freq = cfg.epoch_log_freq
 
         self._data_stats_estimated = False
         self.total_batch_size = None
@@ -397,3 +392,25 @@ class StatsMonitor(PipelineHooks):
                 )
 
             logger.info(msg)
+
+
+class StatsMonitorConfig(PipelineHooksConfig[StatsMonitor]):
+    """Configuration class for StatsMonitor."""
+
+    class_type: type[StatsMonitor] = StatsMonitor
+
+    batch_size: Optional[int] = None
+    """The batch size per process. If None, it attempts to be inferred
+    from the dataloader."""
+
+    steps_per_epoch: Optional[int] = None
+    """The number of steps per epoch. If None, it attempts to be inferred
+    from the dataloader."""
+
+    step_log_freq: int = 512
+    """Frequency to log stats at the step level. Logs are output every
+    `step_log_freq` steps."""
+
+    epoch_log_freq: int = 1
+    """Frequency to log stats at the epoch level. Logs are output every
+    `epoch_log_freq` epochs."""
