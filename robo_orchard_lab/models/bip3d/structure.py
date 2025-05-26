@@ -113,7 +113,9 @@ class BIP3D(nn.Module):
     @torch.no_grad()
     def predict(self, inputs):
         model_outs, text_dict = self._forward(inputs)
-        results = self.decoder.post_process(model_outs, text_dict, inputs)
+        results = self.decoder.post_process(
+            model_outs, inputs, text_dict=text_dict
+        )
         return results
 
     def _forward(self, inputs):

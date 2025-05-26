@@ -467,15 +467,15 @@ class BBox3DDecoder(nn.Module):
     def post_process(
         self,
         model_outs,
-        text_dict,
         inputs,
+        text_dict,
     ):
         assert self.post_processor is not None
         results = self.post_processor(
             model_outs["classification"],
             model_outs["prediction"],
-            text_dict=text_dict,
             inputs=inputs,
+            text_dict=text_dict,
         )
         return results
 

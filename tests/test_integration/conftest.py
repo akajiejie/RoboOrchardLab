@@ -31,3 +31,8 @@ def PROJECT_ROOT() -> str:
         project_root = os.path.dirname(project_root)
 
     return project_root
+
+
+@pytest.fixture(scope="session", autouse=True)
+def ROBO_ORCHARD_TEST_WORKSPACE() -> str:
+    return os.environ["ROBO_ORCHARD_TEST_WORKSPACE"]

@@ -12,7 +12,7 @@ test_ut:
 
 test_it:
 	mkdir -p ../build/test && cd ../build/test && pytest -x -c ../../tests/pytest.ini -n 1 --dist loadgroup \
-	../../tests/test_examples --alluredir allure_integrationtest/ \
+	../../tests/test_integration --alluredir allure_integrationtest/ \
 	--junitxml=integrationtest.xml --html=integrationtest.html
 
 .PHONY: test

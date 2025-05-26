@@ -32,11 +32,10 @@ from robo_orchard_lab.dataset.collates import collate_batch_dict
 from robo_orchard_lab.dataset.embodiedscan.metrics import DetMetric
 from robo_orchard_lab.pipeline import SimpleTrainer
 from robo_orchard_lab.pipeline.batch_processor import SimpleBatchProcessor
-from robo_orchard_lab.pipeline.hooks import DoCheckpoint, StatsMonitor
-from robo_orchard_lab.pipeline.hooks.mixin import (
-    HookContextFromCallable,
-    PipelineHookArgs,
-    PipelineHooks,
+from robo_orchard_lab.pipeline.hooks import (
+    LossMovingAverageTrackerConfig,
+    SaveCheckpointConfig,
+    StatsMonitorConfig,
 )
 from robo_orchard_lab.utils import log_basic_config
 
@@ -47,54 +46,10 @@ class MyBatchProcessor(SimpleBatchProcessor):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-    def do_forward(self, model, batch, device):
+    def forward(self, model, batch):
         output = model(batch)
         loss = sum([y.mean() for x, y in output.items() if "loss" in x])
         return output, loss
-
-
-class LossMovingAverageTracker(PipelineHooks):
-    def __init__(self, step_log_freq=25):
-        super().__init__()
-        self.step_log_freq = step_log_freq
-        self.reset()
-        self.register_hook(
-            "on_step", HookContextFromCallable(after=self._on_step_end)
-        )
-
-    def reset(self):
-        self.losses = {}
-
-    def _on_step_end(self, args: PipelineHookArgs):
-        if not args.accelerator.is_main_process:
-            return
-
-        for k, v in args.model_outputs.items():
-            if "loss" not in k:
-                continue
-            if k not in self.losses:
-                self.losses[k] = [0, 0]
-            self.losses[k][0] += v
-            self.losses[k][1] += 1
-
-        if (args.step_id + 1) % self.step_log_freq == 0:
-            msg = "Epoch[{}/{}] Step[{}] GlobalStep[{}/{}]: ".format(
-                args.epoch_id,
-                args.max_epoch,
-                args.step_id,
-                args.global_step_id,
-                args.max_step,
-            )
-            total_loss = 0
-            for k, v in self.losses.items():
-                v = v[0].item() / v[1]
-                msg += f"{k}[{v:.4f}] "
-                total_loss += v
-
-            msg += f"total_loss[{total_loss:.4f}]"
-
-            logger.info(msg)
-            self.reset()
 
 
 def load_config(config_file):
@@ -126,14 +81,16 @@ class GetFile:
         pass
 
 
-def load_checkpoint(model, checkpoint=None, **kwargs):
+def load_checkpoint(model, checkpoint=None, accelerator=None, **kwargs):
     if checkpoint is None:
         return
 
     logger.info(f"load checkpoint: {checkpoint}")
     with GetFile(checkpoint) as checkpoint:
         if checkpoint.endswith(".safetensors"):
-            load_model(model, checkpoint, **kwargs)
+            missing_keys, unexpected_keys = load_model(
+                model, checkpoint, **kwargs
+            )
         else:
             state_dict = torch.load(checkpoint, weights_only=True)
             if "state_dict" in state_dict:
@@ -141,15 +98,15 @@ def load_checkpoint(model, checkpoint=None, **kwargs):
             missing_keys, unexpected_keys = model.load_state_dict(
                 state_dict, strict=False, **kwargs
             )
-            if accelerator.is_main_process:
-                logger.info(
-                    f"num of missing_keys: {len(missing_keys)},"
-                    f"num of unexpected_keys: {len(unexpected_keys)}"
-                )
-                logger.info(
-                    f"missing_keys:\n {missing_keys}\n"
-                    f"unexpected_keys:\n {unexpected_keys}"
-                )
+        if accelerator is None or accelerator.is_main_process:
+            logger.info(
+                f"num of missing_keys: {len(missing_keys)},"
+                f"num of unexpected_keys: {len(unexpected_keys)}"
+            )
+            logger.info(
+                f"missing_keys:\n {missing_keys}\n"
+                f"unexpected_keys:\n {unexpected_keys}"
+            )
 
 
 def main(args, accelerator):
@@ -159,6 +116,13 @@ def main(args, accelerator):
     build_dataset = config.build_dataset
     build_optimizer = config.build_optimizer
     config = config.config
+
+    if args.kwargs is not None:
+        if os.path.isfile(args.kwargs):
+            kwargs = json.load(open(args.kwargs, "r"))
+        else:
+            kwargs = json.loads(args.kwargs)
+        config.update(kwargs)
     if args.eval_only:
         config["eval_only"] = True
 
@@ -168,15 +132,16 @@ def main(args, accelerator):
     model = build_model(config)
     train_dataset, val_dataset = build_dataset(config, lazy_init=True)
 
+    num_workers = config.get("num_workers", 4)
     if not config.get("eval_only"):
         train_dataloader = torch.utils.data.DataLoader(
             train_dataset,
             batch_size=config["batch_size"],
             shuffle=True,
-            num_workers=config.get("num_workers", 4),
+            num_workers=num_workers,
             pin_memory=True,
             collate_fn=collate_batch_dict,
-            persistent_workers=True,
+            persistent_workers=num_workers > 0,
         )
     else:
         train_dataloader = None
@@ -184,14 +149,14 @@ def main(args, accelerator):
         val_dataset,
         batch_size=config["val_batch_size"],
         shuffle=False,
-        num_workers=config.get("num_workers", 4),
+        num_workers=num_workers,
         pin_memory=False,
         collate_fn=collate_batch_dict,
         persistent_workers=False,
     )
 
     optimizer, lr_scheduler = build_optimizer(config, model)
-    load_checkpoint(model, config.get("checkpoint"))
+    load_checkpoint(model, config.get("checkpoint"), accelerator)
 
     trainer = SimpleTrainer(
         model=model,
@@ -204,11 +169,13 @@ def main(args, accelerator):
         grad_max_norm=10,
         batch_processor=MyBatchProcessor(need_backward=True),
         hooks=[
-            StatsMonitor(
+            StatsMonitorConfig(
                 step_log_freq=config["step_log_freq"],
             ),
-            LossMovingAverageTracker(step_log_freq=config["step_log_freq"]),
-            DoCheckpoint(
+            LossMovingAverageTrackerConfig(
+                step_log_freq=config["step_log_freq"]
+            ),
+            SaveCheckpointConfig(
                 save_step_freq=config.get("save_step_freq"),
                 save_epoch_freq=config.get("save_epoch_freq"),
             ),
@@ -236,6 +203,7 @@ if __name__ == "__main__":
     parser.add_argument("--workspace", type=str, default="./workspace")
     parser.add_argument("--config", type=str, default="./config_bip3d_det.py")
     parser.add_argument("--eval_only", action="store_true")
+    parser.add_argument("--kwargs", type=str, default=None)
     args = parser.parse_args()
 
     workspace_root = args.workspace

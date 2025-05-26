@@ -326,7 +326,7 @@ class HookBasedTrainer:
         )
         logger.info(
             f"Start training loop from epoch {self._start_epoch} "
-            "and step {self._start_step}",
+            f"and step {self._start_step}",
             main_process_only=True,
         )
         end_loop_flag = False

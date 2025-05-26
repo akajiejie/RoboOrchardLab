@@ -383,29 +383,29 @@ def build_transform(config, detection=True):
     #     max_depth=config["max_depth"],
     #     num_depth=config["num_depth"],
     # )
-    format = dict(type=Format)
+    format_data = dict(type=Format)
 
     if detection:
         train_transforms = [
             load_img_depth,
             category_grounding_data_prepare,
             # depth_prob_label_gen,
-            format,
+            format_data,
         ]
         val_transforms = [
             val_load_img_depth,
             val_category_grounding_data_prepare,
-            format,
+            format_data,
         ]
     else:
         train_transforms = [
             load_img_depth,
             # depth_prob_label_gen,
-            format,
+            format_data,
         ]
         val_transforms = [
             val_load_img_depth,
-            format,
+            format_data,
         ]
     return train_transforms, val_transforms
 

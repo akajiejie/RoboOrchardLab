@@ -16,6 +16,7 @@
 
 from .checkpoint import *
 from .grad_clip import *
+from .loss_tracker import *
 from .memory import *
 from .metric import *
 from .mixin import *
