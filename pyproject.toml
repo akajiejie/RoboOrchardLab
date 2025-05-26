@@ -27,11 +27,7 @@ classifiers = [
 requires-python = ">=3.10"
 
 [project.optional-dependencies]
-bip3d = [
-    "transformers",
-    "terminaltables",
-    "pytorch3d @ git+https://github.com/facebookresearch/pytorch3d.git@stable",
-]
+bip3d = ["transformers", "terminaltables", "pytorch3d"]
 all = ["robo_orchard_lab[bip3d]"]
 
 [project.urls]
