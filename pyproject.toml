@@ -12,6 +12,8 @@ dependencies = [
     "accelerate",
     "tqdm",
     "deprecated",
+    "timeout-decorator",
+    "requests",
     # metric
     "torchmetrics>=1.6",
     # robo orchard
@@ -28,7 +30,8 @@ requires-python = ">=3.10"
 
 [project.optional-dependencies]
 bip3d = ["transformers<=4.49.0", "terminaltables", "pytorch3d", "ninja"]
-all = ["robo_orchard_lab[bip3d]"]
+sem = ["diffusers", "lmdb", "pytorch-kinematics"]
+all = ["robo_orchard_lab[bip3d,sem]"]
 
 [project.urls]
 Homepage = "https://github.com/HorizonRobotics/robo_orchard_lab"

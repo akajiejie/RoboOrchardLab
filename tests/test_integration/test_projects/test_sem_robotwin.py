@@ -23,32 +23,29 @@ import tempfile
 import pytest
 
 
-def test_bip3d_grounding(PROJECT_ROOT: str, ROBO_ORCHARD_TEST_WORKSPACE: str):
-    """Test BIP3D training on EmbodiedScan dataset."""
-    project_dir = os.path.join(PROJECT_ROOT, "projects/bip3d_grounding")
+def test_sem_robotwin(PROJECT_ROOT: str, ROBO_ORCHARD_TEST_WORKSPACE: str):
+    """Test SEM training on RoboTwin dataset."""
+    project_dir = os.path.join(PROJECT_ROOT, "projects/sem/robotwin")
     assert os.path.exists(project_dir), f"File not found: {project_dir}"
 
     project_test_path = os.path.join(
         ROBO_ORCHARD_TEST_WORKSPACE,
-        "robo_orchard_workspace/robo_orchard_lab_projects_ut/bip3d_grounding",
+        "robo_orchard_workspace/robo_orchard_lab_projects_ut/sem_robotwin",
     )
     kwargs = dict(
-        checkpoint=os.path.join(
-            project_test_path,
-            "groundingdino_swint_ogc_mmdet-822d7e9d-rename.pth"
-        ),
+        checkpoint=None,
         bert_checkpoint=os.path.join(project_test_path, "bert-base-uncased"),
-        anchor_file=os.path.join(
-            project_test_path, "embodiedscan_kmeans_det_cam_log_z-0.2-3.npy"
-        ),
-        data_root=os.path.join(
+        data_path=os.path.join(
             ROBO_ORCHARD_TEST_WORKSPACE,
-            "robo_orchard_workspace/datasets/embodiedscan",
+            "robo_orchard_workspace/datasets/robotwin/main_branch/lmdb",
+        ),
+        urdf=os.path.join(
+            project_test_path, "urdf/arx5_description_isaac.urdf"
         ),
         step_log_freq=1,
-        max_epoch=3,
-        epoch_eval_freq=3,
+        max_step=3,
         lr=0.0,
+        task_names=["shoe_place"],
     )
     kwargs = json.dumps(kwargs)
     os.chdir(project_dir)
@@ -59,7 +56,7 @@ def test_bip3d_grounding(PROJECT_ROOT: str, ROBO_ORCHARD_TEST_WORKSPACE: str):
                     "python3",
                     "train.py",
                     f"--workspace {workspace_root}",
-                    "--config config_bip3d_det.py",
+                    "--config config_sem_robotwin.py",
                     f"--kwargs '{kwargs}'",
                 ]
             ),
