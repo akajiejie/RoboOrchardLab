@@ -22,7 +22,7 @@ import cv2
 import numpy as np
 import torch
 
-logger = logging.getLogger(__file__)
+logger = logging.getLogger(__name__)
 
 
 def close_loop_data_process(dataset, obs, task_name, joint_state):

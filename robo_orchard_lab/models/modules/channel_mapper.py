@@ -44,7 +44,7 @@ class ChannelMapper(nn.Module):
         bias (bool | str): If specified as `auto`, it will be decided by the
             norm_cfg. Bias will be set as True if `norm_cfg` is None, otherwise
             False. Default: "auto".
-        num_outs (int, optional): Number of output feature maps. There would
+        num_outs (int | None): Number of output feature maps. There would
             be extra_convs when num_outs larger than the length of in_channels.
     """
 
@@ -57,7 +57,7 @@ class ChannelMapper(nn.Module):
         norm_cfg: Optional[dict] = None,
         act_cfg: Optional[dict] = None,
         bias: Union[bool, str] = "auto",
-        num_outs: int = None,
+        num_outs: int | None = None,
     ) -> None:
         super().__init__()
         assert isinstance(in_channels, list)

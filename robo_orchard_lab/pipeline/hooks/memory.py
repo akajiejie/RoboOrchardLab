@@ -43,10 +43,8 @@ class ClearCacheHook(PipelineHooks):
 
     Examples:
         Basic Usage:
-            >>> from robo_orchard_lab.pipeline.hooks.mixin import (
+            >>> from robo_orchard_lab.pipeline.hooks import (
             ...     PipelineHookArgs,
-            ... )
-            >>> from robo_orchard_lab.pipeline.memory import (
             ...     ClearCacheHookConfig,
             ... )
             >>>

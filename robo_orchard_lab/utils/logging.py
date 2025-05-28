@@ -35,13 +35,14 @@ def basic_config(
 
     Args:
         format (str, optional): The log message format. Default value is
-            "%rank %(asctime)s %(levelname)s %(name)s:%(lineno)d %(message)s".
-            - `%rank`: A placeholder replaced with "Rank[<rank>/<world_size>]".
+            "%(rank)s %(asctime)s %(levelname)s %(name)s:%(lineno)d %(message)s".
+            - ``%rank``: A placeholder replaced with "Rank[<rank>/<world_size>]".
             - Other placeholders include:
-              - `%(asctime)s`: Timestamp of the log message.
-              - `%(levelname)s`: Log severity level (e.g., DEBUG, INFO).
-              - `%(name)s`: Name of the logger.
-              - `%(lineno)d`: Line number where the log was issued.
+
+              - ``%(asctime)s``: Timestamp of the log message.
+              - ``%(levelname)s``: Log severity level (e.g., DEBUG, INFO).
+              - ``%(name)s``: Name of the logger.
+              - ``%(lineno)d``: Line number where the log was issued.
         datefmt (str, optional): Date and time format for log messages.
             Default: "%m/%d/%Y %H:%M:%S".
         **kwargs: Additional arguments passed to `logging.basicConfig`, such as
@@ -59,30 +60,32 @@ def basic_config(
             >>> basic_config(level=logging.DEBUG)
             >>> logger = logging.getLogger("example_logger")
             >>> logger.info("This is an info message.")
-            # Output:
-            # Rank[1/4] 11/15/2024 10:00:00 INFO example_logger:15 This is
+            # Output might look like (rank/world_size and timestamp will vary):
+            # Rank[0/1] 05/22/2025 18:40:00 INFO example_logger:X This is
             # an info message.
 
         Custom Format:
             >>> basic_config(
-            >>>     format="%(asctime)s - %rank - %(levelname)s - %(message)s",
-            >>>     level=logging.INFO,
-            >>>     datefmt="%Y-%m-%d %H:%M:%S"
-            >>> )
+            ...     format="%(asctime)s - %(rank)s - %(levelname)s - %(message)s",
+            ...     level=logging.INFO,
+            ...     datefmt="%Y-%m-%d %H:%M:%S",
+            ... )
             >>> logger = logging.getLogger("custom_logger")
             >>> logger.warning("This is a warning message.")
-            # Output:
-            # 2024-11-15 10:01:00 - Rank[0/2] - WARNING - This is a
+            # Output might look like:
+            # 2025-05-22 18:40:00 - Rank[0/1] - WARNING - This is a
             # warning message.
 
-        Non-Distributed Environment:
+        Non-Distributed Environment (assuming get_dist_info returns 0, 1):
             >>> basic_config()
             >>> logger = logging.getLogger("single_logger")
             >>> logger.debug("Debug message in single-node environment.")
-            # Output:
-            # Rank[0/0] 11/15/2024 10:02:00 DEBUG single_logger:15
+            # Output might look like:
+            # Rank[0/1] 05/22/2025 18:40:00 DEBUG single_logger:Y
             # Debug message in single-node environment.
-    """
+
+    """  # noqa: E501
+
     if "%rank" in format:
         dist_info = get_dist_info()
         format = format.replace(

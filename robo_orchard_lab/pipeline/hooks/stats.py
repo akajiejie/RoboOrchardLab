@@ -32,7 +32,7 @@ from robo_orchard_lab.pipeline.hooks.mixin import (
 __all__ = ["StatsMonitor", "StatsMonitorConfig"]
 
 
-logger = logging.getLogger(__file__)
+logger = logging.getLogger(__name__)
 
 
 class StatsMonitor(PipelineHooks):

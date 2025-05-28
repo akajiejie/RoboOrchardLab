@@ -15,4 +15,5 @@
 # permissions and limitations under the License.
 
 from . import batch_processor, hooks
+from .hook_based_trainer import HookBasedTrainer
 from .trainer import SimpleTrainer

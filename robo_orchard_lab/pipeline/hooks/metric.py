@@ -37,7 +37,7 @@ from robo_orchard_lab.utils import as_sequence
 
 __all__ = ["MetricEntry", "MetricTracker", "MetricTrackerConfig"]
 
-logger = logging.getLogger(__file__)
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -45,19 +45,16 @@ class MetricEntry:
     """A class representing an entry for tracking a metric.
 
     Attributes:
-        names (Sequence[str]): A sequence of names for each metric value.
+        names (Sequence[str] | str): A sequence of names for each metric value.
         metric (Metric): The metric object from `torchmetrics` for computation.
-
-    Methods:
-        get: Retrieves the names and computed metric values as pairs.
     """
 
-    names: Sequence[str]
+    names: Sequence[str] | str
     metric: Metric
 
     def __post_init__(self) -> None:
         """Initializes the names attribute as a sequence."""
-        self.names = as_sequence(self.names)
+        self.names: Sequence[str] = as_sequence(self.names)
 
     def get(self) -> Iterable[Tuple[str, Any]]:
         """Computes and retrieves the metric values along with their names.
@@ -153,12 +150,14 @@ class MetricTracker(PipelineHooks):
         Example:
             A typical implementation in a subclass might look like this:
 
-            ```python
-            class CustomMetricTracker(MetricTracker):
-                def update_metric(self, batch, model_outputs):
-                    for metric in self.metrics:
-                        metric.update(batch["label"], model_outputs["pred"])
-            ```
+            .. code-block:: python
+
+                class CustomMetricTracker(MetricTracker):
+                    def update_metric(self, batch, model_outputs):
+                        for metric in self.metrics:
+                            metric.update(
+                                batch["label"], model_outputs["pred"]
+                            )
         """
 
     def _reset(self) -> None:

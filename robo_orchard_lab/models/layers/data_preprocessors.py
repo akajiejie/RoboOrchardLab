@@ -30,7 +30,7 @@ class BaseDataPreprocessor(nn.Module):
 
     A base class for preprocessing data, particularly images
     This class handles image normalization, image channel manipulation,
-      and optional grid masking augmentation.
+    and optional grid masking augmentation.
 
     Args:
         mean (Optional[Sequence[float]]): The mean values for normalization.

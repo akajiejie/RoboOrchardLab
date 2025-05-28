@@ -18,6 +18,7 @@
 # https://github.com/open-mmlab/mmcv
 # Modifications have been made to fit the needs of this project.
 
+from typing import Literal
 
 import torch
 import torch.nn.functional as F
@@ -35,17 +36,19 @@ class LayerScale(nn.Module):
         dim (int): Dimension of input features.
         inplace (bool): Whether performs operation in-place.
             Default: `False`.
-        data_format (str): The input data format, could be 'channels_last'
-            or 'channels_first', representing (B, C, H, W) and
-            (B, N, C) format data respectively. Default: 'channels_last'.
+        data_format (Literal["channels_first", "channels_last"]): The input data format,
+            could be "channels_last" or "channels_first", representing (B, C, H, W) and
+            (B, N, C) format data respectively. Default: "channels_last".
         scale (float): Initial value of scale factor. Default: 1.0
-    """
+    """  # noqa: E501
 
     def __init__(
         self,
         dim: int,
         inplace: bool = False,
-        data_format: str = "channels_last",
+        data_format: Literal[
+            "channels_first", "channels_last"
+        ] = "channels_last",  # noqa: E501
         scale: float = 1e-5,
     ):
         super().__init__()
@@ -84,18 +87,17 @@ class MultiheadAttention(nn.Module):
         dropout_layer (obj:`ConfigDict`): The dropout_layer used
             when adding the shortcut.
         batch_first (bool): When it is True,  Key, Query and Value are shape of
-            (batch, n, embed_dim), otherwise (n, batch, embed_dim).
-             Default to False.
-    """
+            (batch, n, embed_dim), otherwise (n, batch, embed_dim). Default to False.
+    """  # noqa: E501
 
     def __init__(
         self,
-        embed_dims,
-        num_heads,
-        attn_drop=0.0,
-        proj_drop=0.0,
+        embed_dims: int,
+        num_heads: int,
+        attn_drop: float = 0.0,
+        proj_drop: float = 0.0,
         dropout_layer: dict | None = None,
-        batch_first=False,
+        batch_first: bool = False,
         **kwargs,
     ):
         super().__init__()
@@ -112,55 +114,53 @@ class MultiheadAttention(nn.Module):
 
     def forward(
         self,
-        query,
-        key=None,
-        value=None,
-        identity=None,
-        query_pos=None,
-        key_pos=None,
-        attn_mask=None,
-        key_padding_mask=None,
+        query: Tensor,
+        key: Tensor | None = None,
+        value: Tensor | None = None,
+        identity: Tensor | None = None,
+        query_pos: Tensor | None = None,
+        key_pos: Tensor | None = None,
+        attn_mask: Tensor | None = None,
+        key_padding_mask: Tensor | None = None,
         **kwargs,
     ):
         """Forward function for `MultiheadAttention`.
 
-        **kwargs allow passing a more general data flow when combining
+        kwargs allow passing a more general data flow when combining
         with other operations in `transformerlayer`.
 
         Args:
             query (Tensor): The input query with shape [num_queries, bs,
                 embed_dims] if self.batch_first is False, else
                 [bs, num_queries embed_dims].
-            key (Tensor): The key tensor with shape [num_keys, bs,
+            key (Tensor | None): The key tensor with shape [num_keys, bs,
                 embed_dims] if self.batch_first is False, else
                 [bs, num_keys, embed_dims] .
                 If None, the ``query`` will be used. Defaults to None.
-            value (Tensor): The value tensor with same shape as `key`.
+            value (Tensor | None): The value tensor with same shape as `key`.
                 Same in `nn.MultiheadAttention.forward`. Defaults to None.
                 If None, the `key` will be used.
-            identity (Tensor): This tensor, with the same shape as x,
+            identity (Tensor | None): This tensor, with the same shape as x,
                 will be used for the identity link.
                 If None, `x` will be used. Defaults to None.
-            query_pos (Tensor): The positional encoding for query, with
+            query_pos (Tensor | None): The positional encoding for query, with
                 the same shape as `x`. If not None, it will
                 be added to `x` before forward function. Defaults to None.
-            key_pos (Tensor): The positional encoding for `key`, with the
+            key_pos (Tensor | None): The positional encoding for `key`, with the
                 same shape as `key`. Defaults to None. If not None, it will
                 be added to `key` before forward function. If None, and
                 `query_pos` has the same shape as `key`, then `query_pos`
                 will be used for `key_pos`. Defaults to None.
-            attn_mask (Tensor): ByteTensor mask with shape [num_queries,
+            attn_mask (Tensor | None): ByteTensor mask with shape [num_queries,
                 num_keys]. Same in `nn.MultiheadAttention.forward`.
                 Defaults to None.
-            key_padding_mask (Tensor): ByteTensor with shape [bs, num_keys].
+            key_padding_mask (Tensor | None): ByteTensor with shape [bs, num_keys].
                 Defaults to None.
 
         Returns:
-            Tensor: forwarded results with shape
-            [num_queries, bs, embed_dims]
-            if self.batch_first is False, else
-            [bs, num_queries embed_dims].
-        """
+            Tensor: forwarded results with shape [num_queries, bs, embed_dims]
+                if self.batch_first is False, else [bs, num_queries embed_dims].
+        """  # noqa: E501
 
         if key is None:
             key = query

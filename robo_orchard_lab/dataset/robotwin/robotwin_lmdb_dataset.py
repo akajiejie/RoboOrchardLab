@@ -29,13 +29,16 @@ from robo_orchard_lab.dataset.lmdb.base_lmdb_dataset import (
     BaseLmdbManipulationDataset,
 )
 
-logger = logging.getLogger(__file__)
+logger = logging.getLogger(__name__)
 
 
 class RoboTwinLmdbDataset(BaseLmdbManipulationDataset):
     """RoboTwin LMDB Dataset.
 
     Index structure:
+
+    .. code-block:: text
+
         {episode_idx}:
             ├── uuid: str
             ├── task_name: str
@@ -43,6 +46,9 @@ class RoboTwinLmdbDataset(BaseLmdbManipulationDataset):
             └── simulation: bool
 
     Meta data structure:
+
+    .. code-block:: text
+
         {uuid}/meta_data: dict
         {uuid}/camera_names: list(str)
         {uuid}/extrinsic
@@ -53,9 +59,15 @@ class RoboTwinLmdbDataset(BaseLmdbManipulationDataset):
         {uuid}/observation/robot_state/joint_positions
 
     Image storage:
+
+    .. code-block:: text
+
         {uuid}/{cam_name}/{step_idx}
 
     Depth storage:
+
+    .. code-block:: text
+
         {uuid}/{cam_name}/{step_idx}
     """
 

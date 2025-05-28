@@ -34,7 +34,7 @@ from robo_orchard_lab.dataset.embodiedscan.embodiedscan_det_grounding_dataset im
 )
 from robo_orchard_lab.utils import as_sequence
 
-logger = logging.getLogger(__file__)
+logger = logging.getLogger(__name__)
 
 
 def average_precision(recalls, precisions, mode="area"):

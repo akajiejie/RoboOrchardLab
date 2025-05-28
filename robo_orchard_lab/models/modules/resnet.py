@@ -26,7 +26,7 @@ import torch.nn as nn
 import torch.utils.checkpoint as cp
 from torch import Tensor
 
-logger = logging.getLogger(__file__)
+logger = logging.getLogger(__name__)
 
 
 def conv3x3(

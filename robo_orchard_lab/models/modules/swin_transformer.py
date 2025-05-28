@@ -31,7 +31,7 @@ from torch import Tensor, nn
 from robo_orchard_lab.models.layers.transformer_layers import FFN
 from robo_orchard_lab.utils import build
 
-logger = logging.getLogger(__file__)
+logger = logging.getLogger(__name__)
 
 
 def to_2tuple(x):
@@ -392,10 +392,9 @@ class PatchMerging(nn.Module):
                 Default: None.
 
         Returns:
-            x (Tensor): Has shape (B, Merged_H * Merged_W, C_out).
-            out_size (tuple[int]): Spatial shape of x, arrange as
-                (Merged_H, Merged_W).
-        """
+            Tensor: Has shape (B, Merged_H * Merged_W, C_out).
+            Tuple[int]: Spatial shape of x, arrange as (Merged_H, Merged_W).
+        """  # noqa: E501
         B, L, C = x.shape
         assert isinstance(input_size, Sequence), (
             f"Expect input_size is `Sequence` but get {input_size}"
@@ -497,14 +496,14 @@ class WindowMSA(nn.Module):
             self.relative_position_bias_table, std=0.02
         )
 
-    def forward(self, x, mask=None):
+    def forward(self, x: Tensor, mask: Tensor | None = None):
         """WindowMSA forward.
 
         Args:
-            x (tensor): input features with shape of (num_windows*B, N, C)
-            mask (tensor | None, Optional): mask with shape of (num_windows,
-                Wh*Ww, Wh*Ww), value should be between (-inf, 0].
-        """
+            x (Tensor): Input features with shape of (num_windows*B, N, C)
+            mask (Tensor | None): Mask with shape of (num_windows, Wh*Ww, Wh*Ww),
+                value should be between (-inf, 0].
+        """  # noqa: E501
         B, N, C = x.shape
         qkv = (
             self.qkv(x)
@@ -912,12 +911,9 @@ class SwinBlockSequence(nn.Module):
 class SwinTransformer(nn.Module):
     """Swin Transformer.
 
-    A PyTorch implement of : `Swin Transformer:
-    Hierarchical Vision Transformer using Shifted Windows`  -
-        https://arxiv.org/abs/2103.14030
+    A PyTorch implementation of `Swin Transformer: Hierarchical Vision Transformer using Shifted Windows <https://arxiv.org/abs/2103.14030>`_.
 
-    Inspiration from
-    https://github.com/microsoft/Swin-Transformer
+    Inspired by the official implementation: <https://github.com/microsoft/Swin-Transformer>_.
 
     Args:
         pretrain_img_size (int | tuple[int]): The size of input image when
@@ -938,9 +934,9 @@ class SwinTransformer(nn.Module):
             stride.) Default: (4, 2, 2, 2).
         out_indices (tuple[int]): Output from which stages.
             Default: (0, 1, 2, 3).
-        qkv_bias (bool, optional): If True, add a learnable bias to query, key,
+        qkv_bias (bool): If True, add a learnable bias to query, key,
             value. Default: True
-        qk_scale (float | None, optional): Override default qk scale of
+        qk_scale (float | None): Override default qk scale of
             head_dim ** -0.5 if set. Default: None.
         patch_norm (bool): If add a norm layer for patch embed and patch
             merging. Default: True.
@@ -953,17 +949,17 @@ class SwinTransformer(nn.Module):
             Default: dict(type='GELU').
         norm_cfg (dict): Config dict for normalization layer at
             output of backone. Defaults: dict(type='LN').
-        with_cp (bool, optional): Use checkpoint or not. Using checkpoint
+        with_cp (bool): Use checkpoint or not. Using checkpoint
             will save some memory while slowing down the training speed.
             Default: False.
-        pretrained (str, optional): model pretrained path. Default: None.
+        pretrained (str | None): model pretrained path. Default: None.
         convert_weights (bool): The flag indicates whether the
             pre-trained model is from the original repo. We may need
             to convert some keys to make it compatible.
             Default: False.
         frozen_stages (int): Stages to be frozen (stop grad and set eval mode).
             Default: -1 (-1 means not freezing any parameters).
-    """
+    """  # noqa: E501
 
     def __init__(
         self,

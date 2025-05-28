@@ -135,7 +135,8 @@ def stack_batch(
         pad_value (int, float): The padding value. Defaults to 0.
 
     Returns:
-       Tensor: The n dim tensor.
+       torch.Tensor: The n dim tensor.
+
     """
     assert isinstance(tensor_list, list), (
         f"Expected input type to be list, but got {type(tensor_list)}"

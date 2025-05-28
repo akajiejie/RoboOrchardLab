@@ -29,7 +29,7 @@ from robo_orchard_lab.dataset.embodiedscan.utils import sample
 from robo_orchard_lab.utils.build import build
 from robo_orchard_lab.utils.misc import as_sequence
 
-logger = logging.getLogger(__file__)
+logger = logging.getLogger(__name__)
 
 
 # fmt: off
@@ -111,9 +111,9 @@ TAIL_LABELS = (
 class EmbodiedScanDetGroundingDataset(Dataset):
     """EmbodiedScanDetGroundingDataset.
 
-    A dataset class for detection and grounding for embediedscan.
-    Follow embodiedscan, the data directory structure as follows:
-    `
+    A dataset class for detection and grounding for EmbodiedScan.
+    Following EmbodiedScan, the data directory structure is as follows::
+
         self.data_root
         ├──embodiedscan
         │   ├──embodiedscan_infos_train.pkl
@@ -131,43 +131,42 @@ class EmbodiedScanDetGroundingDataset(Dataset):
         └──arkitscenes
             ├──Training
             └──Validation
-    `
 
     Args:
         ann_file (str): Path to the annotation file, e.g.,
-            "embodiedscan/embodiedscan_infos_train.pkl".
-        data_root (str, optional): Root directory of the dataset.
-            Defaults to "".
-        test_mode (bool, optional): Whether the dataset is in test mode.
-            Defaults to False.
-        load_anns (bool, optional): Whether to load annotations.
-            Defaults to True.
-        remove_dontcare (bool, optional): Whether to remove "don't care"
-            regions. Defaults to False.
-        dataset_length (Optional[int], optional): Maximum length of the
-            dataset. Defaults to None.
+            ``"embodiedscan/embodiedscan_infos_train.pkl"``.
+        data_root (str): Root directory of the dataset.
+            Defaults to ``""``.
+        test_mode (bool): Whether the dataset is in test mode.
+            Defaults to ``False``.
+        load_anns (bool): Whether to load annotations.
+            Defaults to ``True``.
+        remove_dontcare (bool): Whether to remove "don't care"
+            regions. Defaults to ``False``.
+        dataset_length (Optional[int]): Maximum length of the
+            dataset. Defaults to ``None``.
         mode (Literal["detection", "grounding"]): Mode of the dataset.
-            Defaults to "detection".
-        max_refetch (int, optional): Maximum number of refetch attempts during
-            data loading. Defaults to 100.
-        part (Optional[str], optional): Specific part of the dataset to load,
-            e.g. set it to ["scannet"], the dataset will load scannet data
-                only. Defaults to None.
-        transforms (List[Union[dict, Callable]], optional): List of transforms
-            to apply. Defaults to [].
-        vg_file (Optional[str], optional): Path to the visual grounding file,
-            e.g., "embodiedscan/embodiedscan_train_vg_all.json".
-            Defaults to None.
-        num_text (int, optional): Max number of text descriptions per sample
-            from grounding task. Defaults to 1.
+            Defaults to ``"detection"``.
+        max_refetch (int,): Maximum number of refetch attempts during
+            data loading. Defaults to ``100``.
+        part (Optional[str]): Specific part of the dataset to load.
+            For example, set it to ``"scannet"`` to load ScanNet data only.
+            Defaults to ``None``.
+        transforms (List[Union[dict, Callable]]): List of transforms
+            to apply. Defaults to ``[]``.
+        vg_file (Optional[str]): Path to the visual grounding file,
+            e.g., ``"embodiedscan/embodiedscan_train_vg_all.json"``.
+            Defaults to ``None``.
+        num_text (int): Max number of text descriptions per sample
+            from the grounding task. Defaults to ``1``.
         tokens_positive_rebuild (bool, optional): Whether to rebuild positive
-            tokens. Defaults to True.
-        sep_token (str, optional): Separator token for text processing.
-            Defaults to "[SEP]".
-        lazy_init (bool, optional): Whether to initialize the dataset lazily.
-            Defaults to False.
-        classes (Optional[List[str]], optional): List of class names.
-            If None, use DEFAULT_CLASSES.
+            tokens. Defaults to ``True``.
+        sep_token (str): Separator token for text processing.
+            Defaults to ``"[SEP]"``.
+        lazy_init (bool): Whether to initialize the dataset lazily.
+            Defaults to ``False``.
+        classes (Optional[List[str]]): List of class names.
+            If ``None``, ``DEFAULT_CLASSES`` will be used.
     """
 
     def __init__(

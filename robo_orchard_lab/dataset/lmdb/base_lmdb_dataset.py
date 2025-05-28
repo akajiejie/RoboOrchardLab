@@ -25,27 +25,11 @@ from torch.utils.data import Dataset
 from robo_orchard_lab.dataset.lmdb.lmdb_wrapper import Lmdb
 from robo_orchard_lab.utils.misc import as_sequence
 
-logger = logging.getLogger(__file__)
+logger = logging.getLogger(__name__)
 
 
 class BaseIndexData(BaseModel):
-    """Base data structure for indexing simulation or task-related information.
-
-    Designed for fast initialization of LMDB manipulation dataset.
-
-    Attributes:
-        uuid (str): Unique identifier for the episode.
-        task_name (str): Name of the task performed.
-        num_steps (int): Total number of steps in the episode.
-        user (Optional[str]): Identifier of the collector.
-        embodiment (Optional[str]): Type of embodiment used.
-        date (Optional[str]): Date when the data collected.
-        simulation (bool): Flag indicating if the data is from a simulation.
-
-    Config:
-        extra (str): Configures the model to allow extra fields not explicitly
-            defined in the schema.
-    """
+    """Base data structure for indexing simulation or task-related information."""  # noqa: E501
 
     uuid: str
     task_name: str
@@ -64,20 +48,26 @@ class BaseLmdbManipulationDataset(Dataset):
     The dataset is structured into four fundamental components:
     `index`, `meta`, `depth`, and `image`.
 
-    - **index** and **meta** are organized by episode as the basic unit.
-    - **depth** and **image** are stored by frame as the basic unit.
+    .. note::
 
-    Example:
-    - **index**:
-        - `episode_id`: `BaseIndexData`.
-    - **meta**:
-        - `{uuid}/meta_data`: General metadata about the task.
-        - `{uuid}/camera_names`: List of camera names used in the task.
-        - `{uuid}/observation/joint_positions`: [num_steps * num_joint]
-    - **image**:
-        - `{uuid}/{cam_name}/{step_idx}`: image_buffer
-    - **depth**:
-        - `{uuid}/{cam_name}/{step_idx}`: depth_buffer
+        **index** and **meta** are organized by episode as the basic unit.
+
+        **depth** and **image** are stored by frame as the basic unit.
+
+    An example:
+
+    .. code-block:: text
+
+        - index:
+            - `episode_id`: `BaseIndexData`.
+        - meta:
+            - `{uuid}/meta_data`: General metadata about the task.
+            - `{uuid}/camera_names`: List of camera names used in the task.
+            - `{uuid}/observation/joint_positions`: [num_steps * num_joint]
+        - image:
+            - `{uuid}/{cam_name}/{step_idx}`: image_buffer
+        - depth:
+            - `{uuid}/{cam_name}/{step_idx}`: depth_buffer
 
     Args:
         paths (Union[str, List[str]]): Path(s) to the LMDB database(s). Can be

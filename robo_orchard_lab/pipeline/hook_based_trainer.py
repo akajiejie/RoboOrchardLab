@@ -41,10 +41,11 @@ from robo_orchard_lab.utils.huggingface import (
     accelerator_load_state,
 )
 
-logger = get_logger(__file__)
+logger = get_logger(__name__)
 
 __all__ = [
     "HookBasedTrainer",
+    "ResumeCheckpointConfig",
     "GradientClippingHookConfig",
     "ValidationHookConfig",
     "PipelineHookOrConfigType",
@@ -208,19 +209,18 @@ class HookBasedTrainer:
         hooks (PipelineHooks | Iterable[PipelineHooks]): The hooks to be
             used during training. These hooks can be used to customize
             various stages of the training process.
+        max_step (int | None): The maximum number of steps for
+            training. Either `max_step` or `max_epoch` must be specified.
+        max_epoch (int | None): The maximum number of epochs for
+            training. Either `max_step` or `max_epoch` must be specified.
         grad_clip (GradClipConfig | None): The gradient clipping
             configuration.
-        max_step (ValidationConfig | None): The maximum number of steps for
-            training. Either `max_step` or `max_epoch` must be specified.
-        max_epoch (ValidationConfig | None): The maximum number of epochs for
-            training. Either `max_step` or `max_epoch` must be specified.
         validation (ValidationConfig | None): The validation
             configuration. If not specified, no validation will be
             performed.
         resume_from (ResumeCheckpointConfig | None): The configuration
             for resuming from checkpoints. If not specified, training
             will start from scratch.
-
     """
 
     def __init__(
@@ -232,9 +232,9 @@ class HookBasedTrainer:
         optimizer: torch.optim.Optimizer,
         lr_scheduler: torch.optim.lr_scheduler.LRScheduler,
         hooks: PipelineHookOrConfigType | Iterable[PipelineHookOrConfigType],
-        grad_clip: GradientClippingHookConfig | None = None,
         max_step: int | None = None,
         max_epoch: int | None = None,
+        grad_clip: GradientClippingHookConfig | None = None,
         validation: ValidationHookConfig | None = None,
         resume_from: ResumeCheckpointConfig | None = None,
     ):
@@ -392,3 +392,8 @@ class HookBasedTrainer:
                     max_step=self.max_step, max_epoch=self.max_epoch
                 ):
                     end_loop_flag = True
+
+        logger.info(
+            "\n" + "=" * 50 + "FINISH TRAINING" + "=" * 50,
+            main_process_only=True,
+        )

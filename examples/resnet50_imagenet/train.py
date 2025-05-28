@@ -31,7 +31,7 @@ from torch.utils.data import DataLoader, Dataset
 from torchmetrics import Accuracy as AccuracyMetric
 from torchvision import datasets, models, transforms
 
-from robo_orchard_lab.pipeline import SimpleTrainer
+from robo_orchard_lab.pipeline import HookBasedTrainer
 from robo_orchard_lab.pipeline.batch_processor import SimpleBatchProcessor
 from robo_orchard_lab.pipeline.hooks import (
     MetricEntry,
@@ -236,7 +236,7 @@ def main(cfg: TrainerConfig):
         )
     )
 
-    trainer = SimpleTrainer(
+    trainer = HookBasedTrainer(
         model=model,
         dataloader=train_dataloader,
         optimizer=optimizer,

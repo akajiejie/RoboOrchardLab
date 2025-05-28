@@ -8,6 +8,7 @@ SPHINXBUILD   = sphinx-build
 SPHINXPROJ    = RoboOrchardLab
 SOURCEDIR     = .
 BUILDDIR      = ../build/docs_build
+ROBO_ORCHARD_LAB_DOCS_CURRENT_VERSION_ID ?= master
 
 # Put it first so that "make" without argument is like "make help".
 help:
@@ -17,11 +18,13 @@ help:
 # "make mode" option.  $(O) is meant as a shortcut for $(SPHINXOPTS).
 %: Makefile
 	@mkdir -p $(BUILDDIR)
+	@rm -rf trainer_tutorial/workspace
 	@PYTORCH_JIT=0 \
 	$(SPHINXBUILD) -M $@ "$(SOURCEDIR)" "$(BUILDDIR)" $(SPHINXOPTS) $(O)
+	@cp -rf $(BUILDDIR)/html $(BUILDDIR)/$(ROBO_ORCHARD_LAB_DOCS_CURRENT_VERSION_ID)
 
 clean:
 	@rm -r $(BUILDDIR)/*
-	@rm -r build
+	@rm -r build/
 
 .PHONY: help Makefile

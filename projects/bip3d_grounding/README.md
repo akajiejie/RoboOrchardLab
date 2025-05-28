@@ -98,6 +98,10 @@ You can also download the anchor file we provide.
 
 ### Install BIP3D Dependency
 
+#### Install pytorch3d
+
+This project requires pytorch3d. Since the specific PyTorch3D build (CPU, CUDA 11.x, CUDA 12.x, etc.) depends on your system, please install it manually first by following the [official instructions](https://github.com/facebookresearch/pytorch3d/blob/main/INSTALL.md)
+
 #### From pip
 
 ```bash

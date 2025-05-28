@@ -19,6 +19,8 @@ from torch import nn
 
 from robo_orchard_lab.utils import build
 
+__all__ = ["BIP3D"]
+
 
 class BIP3D(nn.Module):
     def __init__(

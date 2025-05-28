@@ -34,9 +34,7 @@ def depth_to_range_image(
             represents depth in the image plane.
         camera_intrinsic (np.ndarray): Camera intrinsic matrix with shape
             (3, 3). Contains focal lengths and optical center:
-            [[fx,  0, cx],
-             [ 0, fy, cy],
-             [ 0,  0,  1]]
+            [[fx,  0, cx], [0, fy, cy], [0,  0,  1]]
         depth_scale (float): Scale factor to convert raw depth values to
             metric units. For example, if the depth map values are in
             millimeters and you want meters, set `depth_scale=1000.0`.
@@ -101,25 +99,24 @@ def mask_points(
     data: np.ndarray,
     workspace_limits: POINTS_LIMIT_TYPE,
     border_flags: POINTS_BORDER_FLAG_TYPE,
-):
+) -> np.ndarray:
     """Mask point clouds based on specified boundaries.
 
     Args:
         data (np.ndarray): The input point cloud with shape (..., 3),
             where the last dimension represents the x, y, z coordinates.
-        workspace_limits (Tuple[Optional[float], Optional[float],
-            Optional[float], Optional[float], Optional[float],
-            Optional[float]]):
-            The workspace limits in the format (min_x, max_x, min_y,
-            max_y, min_z, max_z).
-        crop_boundaries (Tuple[bool, bool, bool, bool, bool, bool]):
-            Boolean flags specifying if each limit is inclusive
+        workspace_limits (Tuple[Optional[float], Optional[float], Optional[float], Optional[float], Optional[float], Optional[float]]): The workspace
+            limits in the format (min_x, max_x, min_y, max_y, min_z, max_z).
+        border_flags (Tuple[bool, bool, bool, bool, bool, bool]): Boolean flags specifying if each limit is inclusive
             (True) or exclusive (False).
 
     Returns:
-        np.ndarray: A mask array with the same spatial shape as range_image,
+        np.ndarray: A mask array with the same spatial shape as the input
+            data's preceding dimensions (e.g., (H, W) if input is (H, W, 3)),
             where True indicates the points within the workspace limits.
+
     """  # noqa
+
     # Ensure the input data has the shape (..., 3)
     if data.shape[-1] != 3:
         raise ValueError("Input data must have shape (..., 3)")

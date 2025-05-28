@@ -38,7 +38,7 @@ from robo_orchard_lab.utils import as_sequence
 __all__ = ["SimpleBatchProcessor"]
 
 
-logger = logging.getLogger(__file__)
+logger = logging.getLogger(__name__)
 
 
 forward_fn_type = Callable[[Callable, Any], Tuple[Any, Optional[torch.Tensor]]]
@@ -55,9 +55,6 @@ class SimpleBatchProcessor(BatchProcessorMixin):
         need_backward (bool): Whether backward computation is needed.
         transform (Compose): Transformation pipeline for batch data.
         is_init (bool): Whether the processor has been initialized.
-
-    Methods:
-        do_forward: Abstract method to define the forward pass.
     """
 
     def __init__(
@@ -138,28 +135,28 @@ class SimpleBatchProcessor(BatchProcessorMixin):
         Returns:
             Tuple[Any, Optional[torch.Tensor]]:
                 - The first element is the model's outputs. It can be any type
-                that the model produces, such as a tensor, a list of tensors,
-                or a dictionary.
+                  that the model produces, such as a tensor, a list of tensors,
+                  or a dictionary.
                 - The second element is an optional reduced loss tensor. This
-                is used during training when backward computation is required.
-                If loss is not applicable (e.g., during inference), this value
-                can be `None`.
+                  is used during training when backward computation is required.
+                  If loss is not applicable (e.g., during inference), this value
+                  can be `None`.
 
         Notes:
             - In most cases, the `accelerator` will already ensure that both
-            the model and the batch data are moved to the appropriate device
-            before the forward pass.
+              the model and the batch data are moved to the appropriate device
+              before the forward pass.
             - However, if additional operations or modifications are performed
-            on the batch data or model within this method, it is the
-            responsibility of the implementation to confirm they remain on
-            the correct device.
+              on the batch data or model within this method, it is the
+              responsibility of the implementation to confirm they remain on
+              the correct device.
             - The returned loss tensor should already be reduced (e.g., mean or
-            sum over batch elements) to facilitate the backward pass.
+              sum over batch elements) to facilitate the backward pass.
             - This method does not handle backpropagation; it focuses solely
-            on the forward pass.
+              on the forward pass.
             - The transformation of the input batch, if needed, should already
-            be handled prior to this method via the `self.transform` pipeline.
-        """
+              be handled prior to this method via the `self.transform` pipeline.
+        """  # noqa: E501
         pass
 
     def __call__(

@@ -41,7 +41,7 @@ from robo_orchard_lab.pipeline.hooks.mixin import (
 __all__ = ["SimpleTrainer"]
 
 
-logger = logging.getLogger(__file__)
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -155,10 +155,6 @@ class SimpleTrainer(HookBasedTrainer):
         grad_max_norm (Optional[float]): The maximum norm for gradient
             clipping.
         grad_norm_type (int): The type of norm used for gradient clipping.
-
-    Methods:
-        __call__: Executes the training loop, iterating over epochs and steps.
-        eval: Executes evaluation on the self.val_dataloader.
     """
 
     def __init__(
@@ -260,7 +256,7 @@ class SimpleTrainer(HookBasedTrainer):
 
         Returns:
             Optional[Any]: The evaluation metric, or None if evaluation
-            is not performed.
+                is not performed.
         """
         assert self.val_dataloader is not None and self.metric is not None, (
             "val_dataloader and metric should not be None"
