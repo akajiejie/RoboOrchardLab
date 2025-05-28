@@ -36,6 +36,8 @@ from recommonmark.transform import AutoStructify
 
 import robo_orchard_lab
 
+CUR_DIR = os.path.abspath(os.path.dirname(__file__))
+
 with_comment = os.environ.get("DOC_WITH_COMMENT", "0") == "1"
 # -- Project information -----------------------------------------------------
 
@@ -191,8 +193,8 @@ html_context = {
     ),
     "versions_json_url": os.getenv(
         "ROBO_ORCHARD_LAB_DOCS_VERSIONS_JSON",
-        "https://horizonrobotics.github.io/robot_lab/robo_orchard/lab/version.json"
-    )
+        "https://horizonrobotics.github.io/robot_lab/robo_orchard/lab/version.json",
+    ),
 }
 
 html_sidebars = {
@@ -404,3 +406,17 @@ def setup(app):
     gen_index(
         jinja_template_path="index.jinja", gallery_dirs_dict=build_gallery_dict
     )
+    copy_files = [
+        (
+            os.path.join(CUR_DIR, "..", "README.md"),
+            os.path.join(CUR_DIR, "readme.md"),
+        ),
+    ]
+    for src, dst in copy_files:
+        assert os.path.exists(src), f"File {src} does not exist"
+        os.makedirs(os.path.dirname(dst), exist_ok=True)
+        # Copy the file content
+        with open(src, "rb") as f:
+            content = f.read()
+        with open(dst, "wb") as f:
+            f.write(content)

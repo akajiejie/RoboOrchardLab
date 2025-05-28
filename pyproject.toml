@@ -17,8 +17,7 @@ dependencies = [
     # metric
     "torchmetrics>=1.6",
     # robo orchard
-    "robo_orchard_core==0.1.0.dev20250523123659",
-
+    "robo_orchard_core>=0.1.0.dev20250527155434",
 ]
 license = "Apache-2.0"
 license-files = ["LICENSE", "NOTICE"]
