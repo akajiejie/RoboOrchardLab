@@ -9,6 +9,8 @@ omit =
 source =
   robo_orchard_lab
 
+disable_warnings = couldnt-parse
+
 [report]
 ignore_errors = True
 
