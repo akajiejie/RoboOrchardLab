@@ -1,4 +1,6 @@
-Architecture
+.. _overview_lab_arch:
+
+Framework Architecture
 ------------------------
 
 The **RoboOrchardLab** framework is engineered with modularity and clarity at its core, enabling researchers and developers to efficiently build, train, and evaluate embodied AI agents.
@@ -29,18 +31,13 @@ Models Module
 
 This module houses the neural network architectures for various tasks. These are broadly categorized into:
 
-* **Perception:** Specialized models for understanding the environment, such as **BIP3D** for advanced 3D object detection from visual input.
-* **Embodied AI Algorithms:**: Higher-level policies and models for agent interaction, including **SEM**, **Grasping**, **Whole-body Control** (algorithms designed for complex robot motion planning and coordination, under development)
+* **Perception**: Specialized models for understanding the environment, such as :ref:`BIP3D <model_zoo_bip3d>` for advanced 3D object detection from visual input.
+* **Embodied AI Algorithms**: Higher-level policies and models for agent interaction, including :ref:`SEM <model_zoo_sem>`, **Grasping**, **Whole-body Control** (algorithms designed for complex robot motion planning and coordination, under development)
 
-Optimizer & LR Scheduler Module
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-This distinct module manages the optimization algorithms (e.g., Adam, SGD) and learning rate scheduling strategies (e.g., StepLR, CosineAnnealingLR).
-
-Engine
+Pipelines
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-The central orchestrator of the framework. The Engine takes the data, models, optimizer, and scheduler, and executes the defined pipelines for training and evaluation.
+The central orchestrator of the framework. The Pipelines takes the data, models, optimizer, and scheduler, and executes the defined pipelines for training and evaluation.
 It manages the main training loop, incorporates various hooks (for functionalities like checkpointing, TensorBoard logging, statistics monitoring, etc.), and handles the overall execution flow.
 
 Accelerator

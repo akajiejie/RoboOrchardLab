@@ -7,4 +7,4 @@ Overview
     :includehidden:
 
     lab_arch
-    engine_arch
+    hook_based_trainer_arch

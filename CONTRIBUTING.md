@@ -1,36 +1,36 @@
-## Contribution Guide
+# Contribution Guide
 
-### Install by editable mode
+## Install by editable mode
 
 ```bash
 make install-editable
 ```
 
-### Install development requirements
+## Install development requirements
 
 ```bash
 make dev-env
 ```
 
-### Lint
+## Lint
 
 ```bash
 make check-lint
 ```
 
-### Auto format
+## Auto format
 
 ```bash
 make auto-format
 ```
 
-### Build docs
+## Build docs
 
 ```bash
 make doc
 ```
 
-### Run test
+## Run test
 
 ```bash
 make test

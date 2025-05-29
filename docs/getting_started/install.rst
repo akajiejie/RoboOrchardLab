@@ -1,3 +1,5 @@
+.. _getting_started_install:
+
 Installation
 ======================
 
@@ -7,12 +9,10 @@ Prerequest
 * Python >= 3.10 (Tested on 3.10)
 * torch >= 2.4.0
 
-This project requires PyTorch version 2.4.0 or higher. Since the specific PyTorch 
-build (CPU, CUDA 11.x, CUDA 12.x, etc.) depends on your system, please install it 
+This project requires PyTorch version 2.4.0 or higher. Since the specific PyTorch
+build (CPU, CUDA 11.x, CUDA 12.x, etc.) depends on your system, please install it
 manually first by following the official instructions on the
 `PyTorch website <https://pytorch.org/get-started/locally/>`_.
-
-
 
 Install from pip
 --------------------------------
@@ -44,7 +44,7 @@ it from source:
 .. code-block:: shell
 
     cd /path/to/robo_orchard_lab
-    make version # to update the version file from git commit
+    make version  # to update the version file from git commit
     pip install .
 
 
@@ -53,9 +53,7 @@ Known Issues
 
 We have tried to make the installation process as easy as possible, but there are
 some dependencies that may not available on pypi. You have to install them
-manually. 
+manually.
 
-For example, you have to install `pytorch3d` manually because the 
+For example, you have to install `pytorch3d <https://github.com/facebookresearch/pytorch3d>`_ manually because the
 default pip package is not compatible with your PyTorch version.
-
-

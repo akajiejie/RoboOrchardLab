@@ -155,8 +155,10 @@ class TrainerConfig(SettingConfig):
 
 
 cfg = TrainerConfig(
-    dataset=DatasetConfig(pipeline_test=True), max_epoch=5, num_workers=0,
-    workspace_root="./workspace/tutorial2/"
+    dataset=DatasetConfig(pipeline_test=True),
+    max_epoch=5,
+    num_workers=0,
+    workspace_root="./workspace/tutorial2/",
 )
 
 from accelerate import Accelerator

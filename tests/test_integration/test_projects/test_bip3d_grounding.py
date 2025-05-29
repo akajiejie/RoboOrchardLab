@@ -35,7 +35,7 @@ def test_bip3d_grounding(PROJECT_ROOT: str, ROBO_ORCHARD_TEST_WORKSPACE: str):
     kwargs = dict(
         checkpoint=os.path.join(
             project_test_path,
-            "groundingdino_swint_ogc_mmdet-822d7e9d-rename.pth"
+            "groundingdino_swint_ogc_mmdet-822d7e9d-rename.pth",
         ),
         bert_checkpoint=os.path.join(project_test_path, "bert-base-uncased"),
         anchor_file=os.path.join(

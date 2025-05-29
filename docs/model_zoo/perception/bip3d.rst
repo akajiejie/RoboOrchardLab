@@ -37,10 +37,10 @@ Key Features
 Resources
 ---------------------
 * **Project Homepage:** `BIP3D Homepage <https://linxuewu.github.io/BIP3D-page/>`_
-  Includes detailed explanations, visualizations, videos, and links to related resources.*
+  Includes detailed explanations, visualizations, videos, and links to related resources.
 * **Paper (arXiv):** `BIP3D: Bridging 2D Images and 3D Perception for Embodied Intelligence <https://arxiv.org/abs/2411.14869>`_
 * **Hugging Face Hub:** `BIP3D Hub <https://huggingface.co/HorizonRobotics/BIP3D>`_
-  Provides access to pre-trained model checkpoints, model cards, and example usage.*
+  Provides access to pre-trained model checkpoints, model cards, and example usage.
 
 Performance
 -----------------------

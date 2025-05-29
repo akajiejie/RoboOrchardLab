@@ -1,4 +1,4 @@
-Embodied
+Manipulation
 -----------------
 
 .. toctree::

@@ -1,3 +1,5 @@
+.. _trainer_tutorials:
+
 Trainer Tutorials
 ==================
 

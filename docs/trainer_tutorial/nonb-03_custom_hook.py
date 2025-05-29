@@ -20,14 +20,19 @@
 ==========================================================
 In many complex training scenarios, you might need to inject custom logic at various
 points within the training loop (e.g., at the beginning/end of an epoch, or before/after
-a training step). The ``robo_orchard_lab`` framework provides a powerful and flexible
-Hook system based on ``PipelineHooks`` to achieve this without modifying the core
-training engine.
+a training step). The **robo_orchard_lab** framework provides a powerful and flexible
+Hook system based on :py:class:`~robo_orchard_lab.pipeline.hooks.mixin.PipelineHooks` to achieve this
+without modifying the core training engine.
 
 This tutorial will guide you through:
-1. Understanding the core components: ``PipelineHooksConfig``, ``PipelineHooks``, ``HookContext``, and ``PipelineHookArgs``.
+
+1. Understanding the core components: :py:class:`~robo_orchard_lab.pipeline.hooks.mixin.PipelineHooksConfig`, :py:class:`~robo_orchard_lab.pipeline.hooks.mixin.PipelineHooks`,
+:py:class:`~robo_orchard_lab.pipeline.hooks.mixin.HookContext`, and :py:class:`~robo_orchard_lab.pipeline.hooks.mixin.PipelineHookArgs`.
+
 2. Creating a custom hook class that bundles logging logic for different training stages.
+
 3. Configuring and instantiating your custom hook.
+
 4. (Simulated) Seeing how this hook would interact with a training engine.
 
 Let's get started!
@@ -165,8 +170,10 @@ class TrainerConfig(SettingConfig):
 
 
 cfg = TrainerConfig(
-    dataset=DatasetConfig(pipeline_test=True), max_epoch=5, num_workers=0,
-    workspace_root="./workspace/tutorial3/"
+    dataset=DatasetConfig(pipeline_test=True),
+    max_epoch=5,
+    num_workers=0,
+    workspace_root="./workspace/tutorial3/",
 )
 
 from accelerate import Accelerator
@@ -231,7 +238,7 @@ hooks = []
 # Implementing a custom hook in ``robo_orchard_lab`` typically involves two key parts:
 #
 # 1.  **The Hook Implementation Class (e.g., ``MyHook``)**: This is a Python class
-#     that inherits from ``robo_orchard_lab.pipeline.hooks.mixin.PipelineHooks``.
+#     that inherits from :py:class:`~robo_orchard_lab.pipeline.hooks.mixin.PipelineHooks`.
 #     It contains the actual logic that will be executed at different points (channels)
 #     in the training/evaluation pipeline. In its ``__init__`` method, it registers
 #     its methods (or other callables) to specific channels like "on_loop",

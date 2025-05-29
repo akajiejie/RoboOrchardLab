@@ -28,4 +28,4 @@ We are continuously working to expand this collection. Please browse the availab
     :includehidden:
 
     perception/index
-    embodied/index
+    manipulation/index

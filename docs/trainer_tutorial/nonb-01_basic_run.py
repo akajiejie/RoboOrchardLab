@@ -169,8 +169,10 @@ class TrainerConfig(SettingConfig):
 
 
 cfg = TrainerConfig(
-    dataset=DatasetConfig(pipeline_test=True), max_epoch=5, num_workers=0,
-    workspace_root="./workspace/tutorial1/"
+    dataset=DatasetConfig(pipeline_test=True),
+    max_epoch=5,
+    num_workers=0,
+    workspace_root="./workspace/tutorial1/",
 )
 
 
@@ -180,7 +182,7 @@ cfg = TrainerConfig(
 # %%
 # Understanding the Core trainer Components
 # ---------------------------------------------------------
-# Let's dive into the specific components from robo_orchard_lab that make this work.
+# Let's dive into the specific components from **robo_orchard_lab** that make this work.
 #
 
 # %%
@@ -250,10 +252,14 @@ class MyBatchProcessor(SimpleBatchProcessor):
 # %%
 # Hooks: Customizing your pipeline
 # ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-# Hooks are the primary way to add custom behavior to the training or evaluation loop without modifying its source code.
-# They are called at specific points during training or evaluation (e.g., end of epoch, after a step).
+# Hooks are a powerful feature for injecting custom behaviors into the
+# training or evaluation loop at predefined stages (e.g., end of an epoch,
+# after a step), all without modifying the core engine code.
 #
-# For more details please visit the next tutorial, in this tutorial, we will only use the StatsMonitor hook for logging.
+# This tutorial provides a brief introduction, demonstrating how to use the
+# built-in :py:class:`~robo_orchard_lab.pipeline.hooks.stats.StatsMonitor` for basic logging.
+# For a comprehensive guide on the hook system and creating custom hooks,
+# please refer to the next tutorial in this series.
 #
 
 hooks = []

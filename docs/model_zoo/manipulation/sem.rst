@@ -30,7 +30,7 @@ and internal robot embodiment, resulting in more robust, generalizable, and prec
 
 Key Features
 ------------------------
-1. Spatial Enhancer:
+1. **Spatial Enhancer**:
 
 * Elevates multi-view 2D image features into a unified 3D representation using camera geometry and depth observations.
 * Enables fine-grained spatial reasoning while preserving the semantic richness of 2D vision backbones.
@@ -41,18 +41,18 @@ Key Features
    :align: center
    :width: 100%
 
-2. Joint-Centric Robot State Encoder:
+2. **Joint-Centric Robot State Encoder**:
 
 * Models the robot's kinematic structure as a graph of interconnected joints.
 * Predicts distributions over full joint trajectories, not just end-effector poses.
 * Applies graph attention to capture joint dependencies, enhancing embodiment-aware understanding and enabling finer-grained control.
 
-3. Feature Enhancer:
+3. **Feature Enhancer**:
 
 * Facilitates cross-modal fusion and alignment of text and image features, emphasizing task-relevant regions.
 * Offers two implementations: GroundingDINO-style enhancer and language model-style enhancer.
 
-4. Action Decoder:
+4. **Action Decoder**:
 
 * Employs a diffusion transformer to predict future trajectories from aggregated features.
 * Includes additional cross-attention modules for robot state, image, and text features.
