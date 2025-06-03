@@ -30,7 +30,14 @@ requires-python = ">=3.10"
 [project.optional-dependencies]
 bip3d = ["transformers<=4.49.0", "terminaltables", "pytorch3d", "ninja"]
 sem = ["robo_orchard_lab[bip3d]", "diffusers", "lmdb", "pytorch-kinematics"]
-all = ["robo_orchard_lab[bip3d,sem]"]
+mcap_datasets = [
+    "mcap-protobuf-support",
+    "mcap-ros2-support",
+    "mcap",
+    "foxglove-schemas-protobuf",
+    "opencv-python",
+]
+all = ["robo_orchard_lab[bip3d,sem,mcap_datasets]"]
 
 [project.urls]
 Homepage = "https://github.com/HorizonRobotics/robo_orchard_lab"
