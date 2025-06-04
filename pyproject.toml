@@ -31,11 +31,12 @@ requires-python = ">=3.10"
 bip3d = ["transformers<=4.49.0", "terminaltables", "pytorch3d", "ninja"]
 sem = ["robo_orchard_lab[bip3d]", "diffusers", "lmdb", "pytorch-kinematics"]
 mcap_datasets = [
-    "mcap-protobuf-support",
+    "mcap-protobuf-support>=0.5.3",
     "mcap-ros2-support",
-    "mcap",
-    "foxglove-schemas-protobuf",
+    "mcap>=1.2.2",
+    "foxglove-schemas-protobuf>=0.3.0",
     "opencv-python",
+    "datasets>=3.2.0",
 ]
 all = ["robo_orchard_lab[bip3d,sem,mcap_datasets]"]
 

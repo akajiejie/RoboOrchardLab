@@ -369,6 +369,7 @@ class MyHook(PipelineHooks):
 # like logging frequencies.
 #
 
+
 class MyHookConfig(PipelineHooksConfig[MyHook]):
     class_type: type[MyHook] = MyHook
     log_step_freq: int = 5
