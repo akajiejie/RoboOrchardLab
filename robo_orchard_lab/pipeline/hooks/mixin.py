@@ -59,34 +59,6 @@ class PipelineHookArgs:
     information required by hooks at different stages of the training or
     evaluation pipeline. It is designed to be flexible and extensible for
     different training configurations.
-
-    Attributes:
-        accelerator (Accelerator): The `Accelerator` instance managing
-            distributed training.
-        epoch_id (int): The current epoch ID, starting from 0.
-        step_id (int): The current step ID within the current epoch,
-            starting from 0.
-        global_step_id (int): The global step ID across all epochs,
-            starting from 0.
-        max_epoch (Optional[int]): The maximum number of epochs for training.
-        max_step (Optional[int]): The maximum number of steps for training.
-        start_epoch (int): The epoch where training or evaluation started.
-            This should be set when resuming from checkpoints. Default is 0.
-        start_step (int): The step where training or evaluation started.
-            This should be set when resuming from checkpoints. Default is 0.
-        dataloader (Optional[Iterable]): The data loader for feeding
-            batches to the model. This should only be used to get the
-            properties of the dataloader, NOT for data access! The
-            `batch` attribute should be used for that.
-        optimizer (Optional[torch.optim.Optimizer]): The optimizer used
-            during training.
-        lr_scheduler (Optional[torch.optim.lr_scheduler.LRScheduler]):
-            The learning rate scheduler used during training.
-        batch (Optional[Any]): The current batch of data being processed.
-        model_outputs (Optional[Any]): The outputs produced by the model
-            during the forward pass.
-        reduce_loss (Optional[torch.Tensor]): The loss value after reduction
-            for distributed training.
     """
 
     accelerator: Accelerator

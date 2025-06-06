@@ -42,14 +42,9 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class MetricEntry:
-    """A class representing an entry for tracking a metric.
+    """A class representing an entry for tracking a metric."""
 
-    Attributes:
-        names (Sequence[str] | str): A sequence of names for each metric value.
-        metric (Metric): The metric object from `torchmetrics` for computation.
-    """
-
-    names: Sequence[str] | str
+    names: Sequence[str] | str # type: ignore
     metric: Metric
 
     def __post_init__(self) -> None:

@@ -28,11 +28,14 @@ class BatchDepthProbGTGenerator(nn.Module):
     the GT should have a shape of [bs, num_view, num_feature, num_depth],
     where num_feature represents the total number of feature vectors in the
     multi-stride feature maps. Each image feature corresponds to a patch
-    (composed of stride × stride pixels), and the GT indicates the depth
+    (composed of stride x stride pixels), and the GT indicates the depth
     distribution of all pixels within that patch.
 
     Compute the depth distribution for a single pixel using linear
     interpolation, example:
+
+    .. code-block: text
+
         min_depth, max_depth, num_depth = 0, 3, 4
         depth_anchor: [0, 1, 2, 3]
         pixel_depth: 1.2
@@ -42,7 +45,7 @@ class BatchDepthProbGTGenerator(nn.Module):
         depth_prob_gt: [0, 0.8, 0.2, 0]
 
     Invalid Depth Handling:
-        If a pixel’s depth is ≤0 or >=valid_max_depth, it is marked as
+        If a pixel's depth is ≤0 or >=valid_max_depth, it is marked as
         invalid. The valid pixel ratio in a patch is used as the loss
         weight for that patch. If more than valid_threshold% of pixels in
         a patch are valid, the entire patch is deemed invalid, and the

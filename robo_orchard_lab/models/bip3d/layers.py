@@ -67,8 +67,8 @@ class MultiScaleDeformableAttention(nn.Module):
         dropout (float): A Dropout layer on `inp_identity`.
             Default: 0.1.
         batch_first (bool): Key, Query and Value are shape of
-            (batch, n, embed_dim)
-            or (n, batch, embed_dim). Default to False.
+            (batch, n, embed_dim) or (n, batch, embed_dim).
+            Default to False.
         norm_cfg (dict): Config dict for normalization layer.
             Default: None.
         value_proj_ratio (float): The expansion ratio of value_proj.
@@ -206,8 +206,7 @@ class MultiScaleDeformableAttention(nn.Module):
                 as [0, h_0*w_0, h_0*w_0+h_1*w_1, ...].
 
         Returns:
-            Tensor: forwarded results with shape
-            [num_query, bs, embed_dims].
+            Tensor: forwarded results with shape [num_query, bs, embed_dims].
         """
 
         if value is None:
@@ -770,12 +769,12 @@ class SingleScaleBiAttentionBlock(nn.Module):
         inputs.
 
         Args:
-        visual (Tensor): The visual input tensor.
-        lang (Tensor): The language input tensor.
-        attention_mask_v (Optional[Tensor]):
-            An optional attention mask tensor for the visual input.
-        attention_mask_l (Optional[Tensor]):
-            An optional attention mask tensor for the language input.
+            visual (Tensor): The visual input tensor.
+            lang (Tensor): The language input tensor.
+            attention_mask_v (Optional[Tensor]):
+                An optional attention mask tensor for the visual input.
+            attention_mask_l (Optional[Tensor]):
+                An optional attention mask tensor for the language input.
 
         Returns:
             Tuple[Tensor, Tensor]: A tuple containing the updated
