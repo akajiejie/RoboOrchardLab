@@ -50,7 +50,7 @@
         {
             "language": "python",
             "template": [
-                "Copyright (c) <<year>> <<company>>. All Rights Reserved.",
+                "Copyright (c) 2024-<<year>> <<company>>. All Rights Reserved.",
                 "",
                 "<<licensetext>>"
             ]
@@ -60,7 +60,7 @@
             "template": [
                 "Project RoboOrchard",
                 "",
-                "Copyright (c) <<year>> <<company>>. All Rights Reserved.",
+                "Copyright (c) 2024-<<year>> <<company>>. All Rights Reserved.",
                 "",
                 "<<licensetext>>"
             ]
@@ -70,10 +70,10 @@
             "template": [
                 "Project RoboOrchard",
                 "",
-                "Copyright (c) <<year>> <<company>>. All Rights Reserved.",
+                "Copyright (c) 2024-<<year>> <<company>>. All Rights Reserved.",
                 "",
                 "<<licensetext>>"
             ]
         }
-    ],
+    ]
 }

@@ -1,6 +1,6 @@
 # Project RoboOrchard
 #
-# Copyright (c) 2024 Horizon Robotics. All Rights Reserved.
+# Copyright (c) 2024-2025 Horizon Robotics. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -21,7 +21,7 @@ import os
 import sys
 
 import yaml
-from utils import load_config
+from utils import load_config  # type: ignore
 
 from robo_orchard_lab.dataset.robotwin.close_loop_eval import evaluation
 from robo_orchard_lab.utils import build, log_basic_config

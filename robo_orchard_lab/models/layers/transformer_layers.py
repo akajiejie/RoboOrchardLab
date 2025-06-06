@@ -1,6 +1,6 @@
 # Project RoboOrchard
 #
-# Copyright (c) 2024 Horizon Robotics. All Rights Reserved.
+# Copyright (c) 2024-2025 Horizon Robotics. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -24,7 +24,7 @@ import torch
 import torch.nn.functional as F
 from torch import Tensor, nn
 
-from robo_orchard_lab.utils import build
+from robo_orchard_lab.utils.build import build
 
 __all__ = ["LayerScale", "MultiheadAttention", "FFN", "MLP"]
 

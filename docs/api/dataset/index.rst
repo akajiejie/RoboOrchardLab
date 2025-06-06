@@ -7,5 +7,6 @@ dataset
     :includehidden:
 
     lmdb
+    mcap
     embodiedscan
     robotwin

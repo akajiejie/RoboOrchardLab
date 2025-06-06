@@ -1,6 +1,6 @@
 # Project RoboOrchard
 #
-# Copyright (c) 2024 Horizon Robotics. All Rights Reserved.
+# Copyright (c) 2024-2025 Horizon Robotics. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -87,7 +87,10 @@ def build_model(config):
         BatchDepthProbGTGenerator,
         DepthFusionSpatialEnhancer,
     )
-    from robo_orchard_lab.models.bip3d.structure import BIP3D
+    from robo_orchard_lab.models.bip3d.structure import (
+        BIP3D,
+        BIP3DConfig,
+    )
     from robo_orchard_lab.models.layers.data_preprocessors import (
         BaseDataPreprocessor,
         GridMask,
@@ -104,240 +107,243 @@ def build_model(config):
 
     embed_dims = config["embed_dims"]
     model = BIP3D(
-        data_preprocessor=dict(
-            type=BaseDataPreprocessor,
-            mean=[123.675, 116.28, 103.53],
-            std=[58.395, 57.12, 57.375],
-            channel_flip=True,
-            batch_transforms=[
-                dict(
-                    type=BatchDepthProbGTGenerator,
-                    min_depth=config.get("min_depth", 0.25),
-                    max_depth=config.get("max_depth", 10),
-                    num_depth=config.get("num_depth", 64),
-                    origin_stride=4,
-                    valid_threshold=0.0,
-                    stride=(8, 16, 32, 64),
-                ),
-                dict(
-                    type=GridMask,
-                    apply_grid_mask_keys=["imgs", "depths"],
-                ),
-            ],
-        ),
-        embed_dims=embed_dims,
-        backbone=dict(
-            type=SwinTransformer,
-            embed_dims=96,
-            depths=[2, 2, 6, 2],
-            num_heads=[3, 6, 12, 24],
-            window_size=7,
-            mlp_ratio=4,
-            qkv_bias=True,
-            qk_scale=None,
-            drop_rate=0.0,
-            attn_drop_rate=0.0,
-            out_indices=(1, 2, 3),
-            with_cp=True,
-            convert_weights=False,
-        ),
-        neck=dict(
-            type=ChannelMapper,
-            in_channels=[192, 384, 768],
-            kernel_size=1,
-            out_channels=embed_dims,
-            act_cfg=None,
-            bias=True,
-            norm_cfg=dict(type=nn.GroupNorm, num_groups=32),
-            num_outs=4,
-        ),
-        backbone_3d=(
-            dict(
-                type=ResNet,
-                depth=34,
-                in_channels=1,
-                base_channels=4,
-                num_stages=4,
+        cfg=BIP3DConfig(
+            data_preprocessor=dict(
+                type=BaseDataPreprocessor,
+                mean=[123.675, 116.28, 103.53],
+                std=[58.395, 57.12, 57.375],
+                channel_flip=True,
+                batch_transforms=[
+                    dict(
+                        type=BatchDepthProbGTGenerator,
+                        min_depth=config.get("min_depth", 0.25),
+                        max_depth=config.get("max_depth", 10),
+                        num_depth=config.get("num_depth", 64),
+                        origin_stride=4,
+                        valid_threshold=0.0,
+                        stride=(8, 16, 32, 64),
+                    ),
+                    dict(
+                        type=GridMask,
+                        apply_grid_mask_keys=["imgs", "depths"],
+                    ),
+                ],
+            ),
+            embed_dims=embed_dims,
+            backbone=dict(
+                type=SwinTransformer,
+                embed_dims=96,
+                depths=[2, 2, 6, 2],
+                num_heads=[3, 6, 12, 24],
+                window_size=7,
+                mlp_ratio=4,
+                qkv_bias=True,
+                qk_scale=None,
+                drop_rate=0.0,
+                attn_drop_rate=0.0,
                 out_indices=(1, 2, 3),
-                bn_eval=True,
                 with_cp=True,
-                style="pytorch",
-            )
-            if config.get("with_depth")
-            else None
-        ),
-        neck_3d=(
-            dict(
+                convert_weights=False,
+            ),
+            neck=dict(
                 type=ChannelMapper,
-                in_channels=[8, 16, 32],
+                in_channels=[192, 384, 768],
                 kernel_size=1,
-                out_channels=32,
+                out_channels=embed_dims,
                 act_cfg=None,
                 bias=True,
-                norm_cfg=dict(type=nn.GroupNorm, num_groups=4),
+                norm_cfg=dict(type=nn.GroupNorm, num_groups=32),
                 num_outs=4,
-            )
-            if config.get("with_depth")
-            else None
-        ),
-        text_encoder=dict(
-            type=BertModel,
-            special_tokens_list=["[CLS]", "[SEP]"],
-            name=config["bert_checkpoint"],
-            pad_to_max=False,
-            use_sub_sentence_represent=True,
-            add_pooling_layer=False,
-            max_tokens=768,
-            use_checkpoint=True,
-            return_tokenized=True,
-        ),
-        feature_enhancer=dict(
-            type=TextImageDeformable2DEnhancer,
-            embed_dims=embed_dims,
-            num_layers=6,
-            text_img_attn_block=dict(
-                v_dim=embed_dims,
-                l_dim=embed_dims,
-                embed_dim=1024,
-                num_heads=4,
-                init_values=1e-4,
             ),
-            img_attn_block=dict(
-                self_attn_cfg=dict(
-                    embed_dims=embed_dims,
-                    num_levels=4,
-                    im2col_step=1,
+            backbone_3d=(
+                dict(
+                    type=ResNet,
+                    depth=34,
+                    in_channels=1,
+                    base_channels=4,
+                    num_stages=4,
+                    out_indices=(1, 2, 3),
+                    bn_eval=True,
+                    with_cp=True,
+                    style="pytorch",
+                )
+                if config.get("with_depth")
+                else None
+            ),
+            neck_3d=(
+                dict(
+                    type=ChannelMapper,
+                    in_channels=[8, 16, 32],
+                    kernel_size=1,
+                    out_channels=32,
+                    act_cfg=None,
+                    bias=True,
+                    norm_cfg=dict(type=nn.GroupNorm, num_groups=4),
+                    num_outs=4,
+                )
+                if config.get("with_depth")
+                else None
+            ),
+            text_encoder=dict(
+                type=BertModel,
+                special_tokens_list=["[CLS]", "[SEP]"],
+                name=config["bert_checkpoint"],
+                pad_to_max=False,
+                use_sub_sentence_represent=True,
+                add_pooling_layer=False,
+                max_tokens=768,
+                use_checkpoint=True,
+                return_tokenized=True,
+            ),
+            feature_enhancer=dict(
+                type=TextImageDeformable2DEnhancer,
+                embed_dims=embed_dims,
+                num_layers=6,
+                text_img_attn_block=dict(
+                    v_dim=embed_dims,
+                    l_dim=embed_dims,
+                    embed_dim=1024,
+                    num_heads=4,
+                    init_values=1e-4,
                 ),
-                ffn_cfg=dict(
-                    embed_dims=embed_dims,
+                img_attn_block=dict(
+                    self_attn_cfg=dict(
+                        embed_dims=embed_dims,
+                        num_levels=4,
+                        im2col_step=1,
+                    ),
+                    ffn_cfg=dict(
+                        embed_dims=embed_dims,
+                        feedforward_channels=2048,
+                        ffn_drop=0.0,
+                    ),
+                ),
+                text_attn_block=dict(
+                    self_attn_cfg=dict(
+                        num_heads=4,
+                        embed_dims=embed_dims,
+                    ),
+                    ffn_cfg=dict(
+                        embed_dims=embed_dims,
+                        feedforward_channels=1024,
+                        ffn_drop=0.0,
+                    ),
+                ),
+                num_feature_levels=4,
+                positional_encoding=dict(
+                    num_feats=embed_dims // 2,
+                    normalize=True,
+                    offset=0.0,
+                    temperature=20,
+                ),
+            ),
+            spatial_enhancer=dict(
+                type=DepthFusionSpatialEnhancer,
+                embed_dims=embed_dims,
+                feature_3d_dim=32,
+                num_depth_layers=2,
+                min_depth=config.get("min_depth", 0.25),
+                max_depth=config.get("max_depth", 10),
+                num_depth=config.get("num_depth", 64),
+                with_feature_3d=config.get("with_depth"),
+                loss_depth_weight=1.0 if config.get("with_depth_loss") else -1,
+            ),
+            decoder=dict(
+                type=BBox3DDecoder,
+                look_forward_twice=True,
+                instance_bank=dict(
+                    type=InstanceBank,
+                    num_anchor=50,
+                    anchor=config["anchor_file"],
+                    embed_dims=256,
+                    anchor_in_camera=True,
+                ),
+                anchor_encoder=dict(
+                    type=DoF9BoxEncoder,
+                    embed_dims=256,
+                    rot_dims=3,
+                ),
+                graph_model=dict(
+                    type=MultiheadAttention,
+                    embed_dims=256,
+                    num_heads=8,
+                    batch_first=True,
+                ),
+                ffn=dict(
+                    type=FFN,
+                    embed_dims=256,
                     feedforward_channels=2048,
                     ffn_drop=0.0,
                 ),
-            ),
-            text_attn_block=dict(
-                self_attn_cfg=dict(
-                    num_heads=4,
-                    embed_dims=embed_dims,
+                norm_layer=dict(type=nn.LayerNorm, normalized_shape=256),
+                deformable_model=dict(
+                    type=DeformableFeatureAggregation,
+                    embed_dims=256,
+                    num_groups=8,
+                    num_levels=4,
+                    use_camera_embed=True,
+                    with_depth=True,
+                    min_depth=config.get("min_depth", 0.25),
+                    max_depth=config.get("max_depth", 10),
+                    kps_generator=dict(
+                        type=SparseBox3DKeyPointsGenerator,
+                        fix_scale=[
+                            [0, 0, 0],
+                            [0.45, 0, 0],
+                            [-0.45, 0, 0],
+                            [0, 0.45, 0],
+                            [0, -0.45, 0],
+                            [0, 0, 0.45],
+                            [0, 0, -0.45],
+                        ],
+                        num_learnable_pts=9,
+                    ),
+                    with_value_proj=True,
+                    filter_outlier=True,
                 ),
-                ffn_cfg=dict(
-                    embed_dims=embed_dims,
-                    feedforward_channels=1024,
-                    ffn_drop=0.0,
+                text_cross_attn=dict(
+                    type=MultiheadAttention,
+                    embed_dims=256,
+                    num_heads=8,
+                    batch_first=True,
+                ),
+                refine_layer=dict(
+                    type=GroundingRefineClsHead,
+                    embed_dims=256,
+                    output_dim=9,
+                    cls_bias=True,
+                ),
+                loss_cls=dict(
+                    type=FocalLoss,
+                    use_sigmoid=True,
+                    gamma=2.0,
+                    alpha=0.25,
+                    loss_weight=1.0,
+                ),
+                loss_reg=dict(
+                    type=DoF9BoxLoss,
+                    loss_weight_wd=1.0,
+                    loss_weight_cd=0.8,
+                ),
+                sampler=dict(
+                    type=Grounding3DTarget,
+                    cls_weight=1.0,
+                    box_weight=1.0,
+                    num_dn=100,
+                    cost_weight_wd=1.0,
+                    cost_weight_cd=0.8,
+                    with_dn_query=True,
+                    num_classes=284,
+                    embed_dims=256,
+                ),
+                gt_reg_key="gt_bboxes_3d",
+                gt_cls_key="tokens_positive",
+                post_processor=dict(
+                    type=GroundingBox3DPostProcess,
+                    num_output=1000,
                 ),
             ),
-            num_feature_levels=4,
-            positional_encoding=dict(
-                num_feats=embed_dims // 2,
-                normalize=True,
-                offset=0.0,
-                temperature=20,
-            ),
-        ),
-        spatial_enhancer=dict(
-            type=DepthFusionSpatialEnhancer,
-            embed_dims=embed_dims,
-            feature_3d_dim=32,
-            num_depth_layers=2,
-            min_depth=config.get("min_depth", 0.25),
-            max_depth=config.get("max_depth", 10),
-            num_depth=config.get("num_depth", 64),
-            with_feature_3d=config.get("with_depth"),
-            loss_depth_weight=1.0 if config.get("with_depth_loss") else -1,
-        ),
-        decoder=BBox3DDecoder(
-            look_forward_twice=True,
-            instance_bank=dict(
-                type=InstanceBank,
-                num_anchor=50,
-                anchor=config["anchor_file"],
-                embed_dims=256,
-                anchor_in_camera=True,
-            ),
-            anchor_encoder=dict(
-                type=DoF9BoxEncoder,
-                embed_dims=256,
-                rot_dims=3,
-            ),
-            graph_model=dict(
-                type=MultiheadAttention,
-                embed_dims=256,
-                num_heads=8,
-                batch_first=True,
-            ),
-            ffn=dict(
-                type=FFN,
-                embed_dims=256,
-                feedforward_channels=2048,
-                ffn_drop=0.0,
-            ),
-            norm_layer=dict(type=nn.LayerNorm, normalized_shape=256),
-            deformable_model=dict(
-                type=DeformableFeatureAggregation,
-                embed_dims=256,
-                num_groups=8,
-                num_levels=4,
-                use_camera_embed=True,
-                with_depth=True,
-                min_depth=config.get("min_depth", 0.25),
-                max_depth=config.get("max_depth", 10),
-                kps_generator=dict(
-                    type=SparseBox3DKeyPointsGenerator,
-                    fix_scale=[
-                        [0, 0, 0],
-                        [0.45, 0, 0],
-                        [-0.45, 0, 0],
-                        [0, 0.45, 0],
-                        [0, -0.45, 0],
-                        [0, 0, 0.45],
-                        [0, 0, -0.45],
-                    ],
-                    num_learnable_pts=9,
-                ),
-                with_value_proj=True,
-                filter_outlier=True,
-            ),
-            text_cross_attn=dict(
-                type=MultiheadAttention,
-                embed_dims=256,
-                num_heads=8,
-                batch_first=True,
-            ),
-            refine_layer=dict(
-                type=GroundingRefineClsHead,
-                embed_dims=256,
-                output_dim=9,
-                cls_bias=True,
-            ),
-            loss_cls=dict(
-                type=FocalLoss,
-                use_sigmoid=True,
-                gamma=2.0,
-                alpha=0.25,
-                loss_weight=1.0,
-            ),
-            loss_reg=dict(
-                type=DoF9BoxLoss,
-                loss_weight_wd=1.0,
-                loss_weight_cd=0.8,
-            ),
-            sampler=dict(
-                type=Grounding3DTarget,
-                cls_weight=1.0,
-                box_weight=1.0,
-                num_dn=100,
-                cost_weight_wd=1.0,
-                cost_weight_cd=0.8,
-                with_dn_query=True,
-                num_classes=284,
-                embed_dims=256,
-            ),
-            gt_reg_key="gt_bboxes_3d",
-            gt_cls_key="tokens_positive",
-            post_processor=dict(
-                type=GroundingBox3DPostProcess,
-                num_output=1000,
-            ),
-        ),
+        )
     )
     return model
 

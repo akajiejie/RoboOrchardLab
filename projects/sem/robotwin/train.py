@@ -1,6 +1,6 @@
 # Project RoboOrchard
 #
-# Copyright (c) 2024 Horizon Robotics. All Rights Reserved.
+# Copyright (c) 2024-2025 Horizon Robotics. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -68,6 +68,11 @@ def main(args, accelerator):
         logger.info("\n" + json.dumps(config, indent=4))
 
     model = build_model(config)
+    # save model config
+    accelerator.register_save_state_pre_hook(
+        model.accelerator_save_state_pre_hook
+    )
+
     train_dataset, _ = build_dataset(config, lazy_init=True)
 
     num_workers = config.get("num_workers", 4)

@@ -1,6 +1,6 @@
 # Project RoboOrchard
 #
-# Copyright (c) 2024 Horizon Robotics. All Rights Reserved.
+# Copyright (c) 2024-2025 Horizon Robotics. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -131,6 +131,11 @@ def main(args, accelerator):
 
     model = build_model(config)
     train_dataset, val_dataset = build_dataset(config, lazy_init=True)
+
+    # save model config
+    accelerator.register_save_state_pre_hook(
+        model.accelerator_save_state_pre_hook
+    )
 
     num_workers = config.get("num_workers", 4)
     if not config.get("eval_only"):

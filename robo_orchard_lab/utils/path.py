@@ -14,24 +14,20 @@
 # implied. See the License for the specific language governing
 # permissions and limitations under the License.
 
-import pytest
-
-from robo_orchard_lab.utils import as_sequence
+import os
 
 
-@pytest.mark.parametrize(
-    ["input", "output"],
-    [
-        pytest.param([0], [0]),
-        pytest.param((0,), (0,)),
-        pytest.param(None, []),
-        pytest.param(0, [0]),
-    ],
-)
-def test_as_sequence(input, output):
-    ret = as_sequence(input)
-    assert ret == output
+class DirectoryNotEmptyError(Exception):
+    """Exception raised when a directory is not empty as expected."""
+
+    pass
 
 
-if __name__ == "__main__":
-    pytest.main(["-s", __file__])
+def is_empty_directory(directory: str) -> bool:
+    if not os.path.isdir(directory):
+        raise NotADirectoryError(f"{directory} is not a directory!")
+    try:
+        next(os.scandir(directory))
+        return False
+    except StopIteration:
+        return True

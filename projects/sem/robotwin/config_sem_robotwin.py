@@ -1,6 +1,6 @@
 # Project RoboOrchard
 #
-# Copyright (c) 2024 Horizon Robotics. All Rights Reserved.
+# Copyright (c) 2024-2025 Horizon Robotics. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -55,7 +55,7 @@ def build_model(config):
         BatchDepthProbGTGenerator,
         DepthFusionSpatialEnhancer,
     )
-    from robo_orchard_lab.models.bip3d.structure import BIP3D
+    from robo_orchard_lab.models.bip3d.structure import BIP3D, BIP3DConfig
     from robo_orchard_lab.models.layers.data_preprocessors import (
         BaseDataPreprocessor,
     )
@@ -115,251 +115,159 @@ def build_model(config):
         depth_gt_stride = (8, 16, 32)
 
     model = BIP3D(
-        data_preprocessor=dict(
-            type=BaseDataPreprocessor,
-            mean=[123.675, 116.28, 103.53],
-            std=[58.395, 57.12, 57.375],
-            channel_flip=False,
-            unsqueeze_depth_channel=True,
-            batch_transforms=[
-                dict(
-                    type=BatchDepthProbGTGenerator,
-                    min_depth=config["min_depth"],
-                    max_depth=config["max_depth"],
-                    num_depth=config["num_depth"],
-                    origin_stride=2,
-                    valid_threshold=0.5,
-                    stride=depth_gt_stride,
-                ),
-            ],
-        ),
-        embed_dims=embed_dims,
-        backbone=dict(
-            type=SwinTransformer,
-            embed_dims=96,
-            depths=[2, 2, 6, 2],
-            num_heads=[3, 6, 12, 24],
-            window_size=7,
-            mlp_ratio=4,
-            qkv_bias=True,
-            qk_scale=None,
-            drop_rate=0.0,
-            attn_drop_rate=0.0,
-            out_indices=(1, 2, 3),
-            with_cp=True,
-            convert_weights=False,
-        ),
-        neck=dict(
-            type=ChannelMapper,
-            in_channels=[192, 384, 768],
-            kernel_size=1,
-            out_channels=embed_dims,
-            act_cfg=None,
-            bias=True,
-            norm_cfg=dict(type=nn.GroupNorm, num_groups=32),
-            num_outs=num_feature_levels,
-        ),
-        backbone_3d=(
-            dict(
-                type=ResNet,
-                depth=34,
-                in_channels=1,
-                base_channels=4,
-                num_stages=4,
+        cfg=BIP3DConfig(
+            data_preprocessor=dict(
+                type=BaseDataPreprocessor,
+                mean=[123.675, 116.28, 103.53],
+                std=[58.395, 57.12, 57.375],
+                channel_flip=False,
+                unsqueeze_depth_channel=True,
+                batch_transforms=[
+                    dict(
+                        type=BatchDepthProbGTGenerator,
+                        min_depth=config["min_depth"],
+                        max_depth=config["max_depth"],
+                        num_depth=config["num_depth"],
+                        origin_stride=2,
+                        valid_threshold=0.5,
+                        stride=depth_gt_stride,
+                    ),
+                ],
+            ),
+            embed_dims=embed_dims,
+            backbone=dict(
+                type=SwinTransformer,
+                embed_dims=96,
+                depths=[2, 2, 6, 2],
+                num_heads=[3, 6, 12, 24],
+                window_size=7,
+                mlp_ratio=4,
+                qkv_bias=True,
+                qk_scale=None,
+                drop_rate=0.0,
+                attn_drop_rate=0.0,
                 out_indices=(1, 2, 3),
-                bn_eval=True,
                 with_cp=True,
-                style="pytorch",
-            )
-            if config.get("with_depth")
-            else None
-        ),
-        neck_3d=(
-            dict(
+                convert_weights=False,
+            ),
+            neck=dict(
                 type=ChannelMapper,
-                in_channels=[8, 16, 32],
+                in_channels=[192, 384, 768],
                 kernel_size=1,
-                out_channels=32,
+                out_channels=embed_dims,
                 act_cfg=None,
                 bias=True,
-                norm_cfg=dict(type=nn.GroupNorm, num_groups=4),
+                norm_cfg=dict(type=nn.GroupNorm, num_groups=32),
                 num_outs=num_feature_levels,
-            )
-            if config.get("with_depth")
-            else None
-        ),
-        text_encoder=(
-            dict(
-                type=BertModel,
-                special_tokens_list=["[CLS]", "[SEP]"],
-                name=config["bert_checkpoint"],
-                pad_to_max=False,
-                use_sub_sentence_represent=True,
-                add_pooling_layer=False,
-                max_tokens=768,
-                use_checkpoint=True,
-                return_tokenized=True,
-            )
-            if multi_task
-            else None
-        ),
-        feature_enhancer=(
-            dict(
-                type=TextImageDeformable2DEnhancer,
-                embed_dims=embed_dims,
-                num_layers=6,
-                text_img_attn_block=dict(
-                    v_dim=embed_dims,
-                    l_dim=embed_dims,
-                    embed_dim=1024,
-                    num_heads=4,
-                    init_values=1e-4,
-                ),
-                img_attn_block=dict(
-                    self_attn_cfg=dict(
-                        embed_dims=embed_dims,
-                        num_levels=num_feature_levels,
-                        im2col_step=1,
-                    ),
-                    ffn_cfg=dict(
-                        embed_dims=embed_dims,
-                        feedforward_channels=2048,
-                        ffn_drop=0.0,
-                    ),
-                ),
-                text_attn_block=dict(
-                    self_attn_cfg=dict(
+            ),
+            backbone_3d=(
+                dict(
+                    type=ResNet,
+                    depth=34,
+                    in_channels=1,
+                    base_channels=4,
+                    num_stages=4,
+                    out_indices=(1, 2, 3),
+                    bn_eval=True,
+                    with_cp=True,
+                    style="pytorch",
+                )
+                if config.get("with_depth")
+                else None
+            ),
+            neck_3d=(
+                dict(
+                    type=ChannelMapper,
+                    in_channels=[8, 16, 32],
+                    kernel_size=1,
+                    out_channels=32,
+                    act_cfg=None,
+                    bias=True,
+                    norm_cfg=dict(type=nn.GroupNorm, num_groups=4),
+                    num_outs=num_feature_levels,
+                )
+                if config.get("with_depth")
+                else None
+            ),
+            text_encoder=(
+                dict(
+                    type=BertModel,
+                    special_tokens_list=["[CLS]", "[SEP]"],
+                    name=config["bert_checkpoint"],
+                    pad_to_max=False,
+                    use_sub_sentence_represent=True,
+                    add_pooling_layer=False,
+                    max_tokens=768,
+                    use_checkpoint=True,
+                    return_tokenized=True,
+                )
+                if multi_task
+                else None
+            ),
+            feature_enhancer=(
+                dict(
+                    type=TextImageDeformable2DEnhancer,
+                    embed_dims=embed_dims,
+                    num_layers=6,
+                    text_img_attn_block=dict(
+                        v_dim=embed_dims,
+                        l_dim=embed_dims,
+                        embed_dim=1024,
                         num_heads=4,
-                        embed_dims=embed_dims,
+                        init_values=1e-4,
                     ),
-                    ffn_cfg=dict(
-                        embed_dims=embed_dims,
-                        feedforward_channels=1024,
-                        ffn_drop=0.0,
+                    img_attn_block=dict(
+                        self_attn_cfg=dict(
+                            embed_dims=embed_dims,
+                            num_levels=num_feature_levels,
+                            im2col_step=1,
+                        ),
+                        ffn_cfg=dict(
+                            embed_dims=embed_dims,
+                            feedforward_channels=2048,
+                            ffn_drop=0.0,
+                        ),
                     ),
-                ),
-                num_feature_levels=4,
-                positional_encoding=dict(
-                    num_feats=embed_dims // 2,
-                    normalize=True,
-                    offset=0.0,
-                    temperature=20,
-                ),
-            )
-            if multi_task
-            else None
-        ),
-        spatial_enhancer=dict(
-            type=DepthFusionSpatialEnhancer,
-            embed_dims=embed_dims,
-            feature_3d_dim=32,
-            num_depth_layers=2,
-            min_depth=config.get("min_depth", 0.25),
-            max_depth=config.get("max_depth", 10),
-            num_depth=config.get("num_depth", 64),
-            with_feature_3d=config.get("with_depth"),
-            loss_depth_weight=1.0 if config.get("with_depth_loss") else -1,
-        ),
-        decoder=dict(
-            type=SEMActionDecoder,
-            img_cross_attn=dict(
-                type=RotaryAttention,
+                    text_attn_block=dict(
+                        self_attn_cfg=dict(
+                            num_heads=4,
+                            embed_dims=embed_dims,
+                        ),
+                        ffn_cfg=dict(
+                            embed_dims=embed_dims,
+                            feedforward_channels=1024,
+                            ffn_drop=0.0,
+                        ),
+                    ),
+                    num_feature_levels=4,
+                    positional_encoding=dict(
+                        num_feats=embed_dims // 2,
+                        normalize=True,
+                        offset=0.0,
+                        temperature=20,
+                    ),
+                )
+                if multi_task
+                else None
+            ),
+            spatial_enhancer=dict(
+                type=DepthFusionSpatialEnhancer,
                 embed_dims=embed_dims,
-                num_heads=8,
-                max_position_embeddings=32,
+                feature_3d_dim=32,
+                num_depth_layers=2,
+                min_depth=config.get("min_depth", 0.25),
+                max_depth=config.get("max_depth", 10),
+                num_depth=config.get("num_depth", 64),
+                with_feature_3d=config.get("with_depth"),
+                loss_depth_weight=1.0 if config.get("with_depth_loss") else -1,
             ),
-            norm_layer=dict(
-                type=decoder_norm,
-                normalized_shape=embed_dims,
-            ),
-            ffn=dict(
-                type=FFN,
-                embed_dims=embed_dims,
-                feedforward_channels=2048,
-                act_cfg=dict(type=nn.SiLU, inplace=True),
-            ),
-            head=dict(
-                type=UpsampleHead,
-                upsample_sizes=upsample_sizes,
-                input_dim=embed_dims,
-                dims=head_dims,
-                norm=dict(type=decoder_norm, normalized_shape=embed_dims),
-                act=dict(type=nn.SiLU, inplace=True),
-                norm_act_idx=[0, 1, 2],
-            ),
-            training_noise_scheduler=dict(
-                type=DDPMScheduler,
-                num_train_timesteps=1000,
-                beta_schedule="squaredcos_cap_v2",
-                prediction_type="sample",
-                clip_sample=False,
-            ),
-            test_noise_scheduler=dict(
-                type=DPMSolverMultistepScheduler,
-                num_train_timesteps=1000,
-                beta_schedule="squaredcos_cap_v2",
-                prediction_type="sample",
-            ),
-            num_inference_timesteps=10,
-            joint_self_attn=dict(
-                type=JointGraphAttention,
-                embed_dims=embed_dims,
-                num_heads=8,
-            ),
-            temp_cross_attn=dict(
-                type=RotaryAttention,
-                embed_dims=embed_dims,
-                num_heads=8,
-                max_position_embeddings=32,
-            ),
-            text_cross_attn=dict(
-                type=RotaryAttention,
-                embed_dims=embed_dims,
-                num_heads=8,
-                max_position_embeddings=256,
-            ),
-            pred_steps=config["pred_steps"],
-            timestep_norm_layer=dict(
-                type=AdaRMSNorm,
-                normalized_shape=embed_dims,
-                condition_dims=256,
-                zero=True,
-            ),
-            operation_order=[
-                "t_norm",
-                "joint_self_attn",
-                "gate_msa",
-                "norm",
-                "temp_cross_attn",
-                "norm",
-                "img_cross_attn",
-                "norm",
-                *(
-                    [
-                        None,
-                        None,
-                    ]
-                    if not multi_task
-                    else [
-                        "text_cross_attn",
-                        "norm",
-                    ]
-                ),
-                "scale_shift",
-                "ffn",
-                "gate_mlp",
-            ]
-            * 6,
-            feature_level=[1, 2],
-            act_cfg=dict(type=nn.SiLU, inplace=True),
-            robot_encoder=dict(
-                type=SEMRobotStateEncoder,
-                embed_dims=embed_dims,
-                chunk_size=min(8, config["hist_steps"]),
-                joint_self_attn=dict(
-                    type=JointGraphAttention,
+            decoder=dict(
+                type=SEMActionDecoder,
+                img_cross_attn=dict(
+                    type=RotaryAttention,
                     embed_dims=embed_dims,
                     num_heads=8,
+                    max_position_embeddings=32,
                 ),
                 norm_layer=dict(
                     type=decoder_norm,
@@ -371,29 +279,123 @@ def build_model(config):
                     feedforward_channels=2048,
                     act_cfg=dict(type=nn.SiLU, inplace=True),
                 ),
-                temp_self_attn=dict(
+                head=dict(
+                    type=UpsampleHead,
+                    upsample_sizes=upsample_sizes,
+                    input_dim=embed_dims,
+                    dims=head_dims,
+                    norm=dict(type=decoder_norm, normalized_shape=embed_dims),
+                    act=dict(type=nn.SiLU, inplace=True),
+                    norm_act_idx=[0, 1, 2],
+                ),
+                training_noise_scheduler=dict(
+                    type=DDPMScheduler,
+                    num_train_timesteps=1000,
+                    beta_schedule="squaredcos_cap_v2",
+                    prediction_type="sample",
+                    clip_sample=False,
+                ),
+                test_noise_scheduler=dict(
+                    type=DPMSolverMultistepScheduler,
+                    num_train_timesteps=1000,
+                    beta_schedule="squaredcos_cap_v2",
+                    prediction_type="sample",
+                ),
+                num_inference_timesteps=10,
+                joint_self_attn=dict(
+                    type=JointGraphAttention,
+                    embed_dims=embed_dims,
+                    num_heads=8,
+                ),
+                temp_cross_attn=dict(
                     type=RotaryAttention,
                     embed_dims=embed_dims,
                     num_heads=8,
                     max_position_embeddings=32,
                 ),
-                act_cfg=dict(type=nn.SiLU, inplace=True),
+                text_cross_attn=dict(
+                    type=RotaryAttention,
+                    embed_dims=embed_dims,
+                    num_heads=8,
+                    max_position_embeddings=256,
+                ),
+                pred_steps=config["pred_steps"],
+                timestep_norm_layer=dict(
+                    type=AdaRMSNorm,
+                    normalized_shape=embed_dims,
+                    condition_dims=256,
+                    zero=True,
+                ),
                 operation_order=[
-                    "norm",
+                    "t_norm",
                     "joint_self_attn",
-                    None,
-                    None,
+                    "gate_msa",
                     "norm",
+                    "temp_cross_attn",
+                    "norm",
+                    "img_cross_attn",
+                    "norm",
+                    *(
+                        [
+                            None,
+                            None,
+                        ]
+                        if not multi_task
+                        else [
+                            "text_cross_attn",
+                            "norm",
+                        ]
+                    ),
+                    "scale_shift",
                     "ffn",
+                    "gate_mlp",
                 ]
-                * 4
-                + ["norm"],
+                * 6,
+                feature_level=[1, 2],
+                act_cfg=dict(type=nn.SiLU, inplace=True),
+                robot_encoder=dict(
+                    type=SEMRobotStateEncoder,
+                    embed_dims=embed_dims,
+                    chunk_size=min(8, config["hist_steps"]),
+                    joint_self_attn=dict(
+                        type=JointGraphAttention,
+                        embed_dims=embed_dims,
+                        num_heads=8,
+                    ),
+                    norm_layer=dict(
+                        type=decoder_norm,
+                        normalized_shape=embed_dims,
+                    ),
+                    ffn=dict(
+                        type=FFN,
+                        embed_dims=embed_dims,
+                        feedforward_channels=2048,
+                        act_cfg=dict(type=nn.SiLU, inplace=True),
+                    ),
+                    temp_self_attn=dict(
+                        type=RotaryAttention,
+                        embed_dims=embed_dims,
+                        num_heads=8,
+                        max_position_embeddings=32,
+                    ),
+                    act_cfg=dict(type=nn.SiLU, inplace=True),
+                    operation_order=[
+                        "norm",
+                        "joint_self_attn",
+                        None,
+                        None,
+                        "norm",
+                        "ffn",
+                    ]
+                    * 4
+                    + ["norm"],
+                    state_dims=state_dims,
+                ),
+                state_loss_weights=state_loss_weights,
+                fk_loss_weight=state_loss_weights,
                 state_dims=state_dims,
             ),
-            state_loss_weights=state_loss_weights,
-            fk_loss_weight=state_loss_weights,
-            state_dims=state_dims,
-        ),
+        )
     )
     return model
 

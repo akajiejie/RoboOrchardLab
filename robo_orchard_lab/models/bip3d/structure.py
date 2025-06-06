@@ -1,6 +1,6 @@
 # Project RoboOrchard
 #
-# Copyright (c) 2024 Horizon Robotics. All Rights Reserved.
+# Copyright (c) 2024-2025 Horizon Robotics. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -17,46 +17,42 @@
 import torch
 from torch import nn
 
-from robo_orchard_lab.utils import build
+from robo_orchard_lab.models.mixin import (
+    ClassType_co,
+    ModelMixin,
+    TorchModuleCfg,
+    TorchModuleCfgType_co,
+)
+from robo_orchard_lab.utils.build import (
+    DelayInitDictType,
+    build,
+)
 
-__all__ = ["BIP3D"]
+__all__ = ["BIP3D", "BIP3DConfig"]
 
 
-class BIP3D(nn.Module):
-    def __init__(
-        self,
-        backbone,
-        decoder,
-        neck=None,
-        text_encoder=None,
-        feature_enhancer=None,
-        spatial_enhancer=None,
-        data_preprocessor=None,
-        backbone_3d=None,
-        neck_3d=None,
-        input_2d="imgs",
-        input_3d="depths",
-        embed_dims=256,
-        pre_spatial_enhancer=False,
-    ):
-        super().__init__()
-        self.backbone = build(backbone)
-        self.decoder = build(decoder)
-        self.neck = build(neck)
-        self.text_encoder = build(text_encoder)
-        self.feature_enhancer = build(feature_enhancer)
-        self.spatial_enhancer = build(spatial_enhancer)
-        self.data_preprocessor = build(data_preprocessor)
-        self.backbone_3d = build(backbone_3d)
-        self.neck_3d = build(neck_3d)
-        self.input_2d = input_2d
-        self.input_3d = input_3d
-        self.embed_dims = embed_dims
-        self.pre_spatial_enhancer = pre_spatial_enhancer
+class BIP3D(ModelMixin):
+    cfg: "BIP3DConfig"  # for type hint
 
-        if text_encoder is not None:
+    def __init__(self, cfg: "BIP3DConfig"):
+        super().__init__(cfg)
+        self.backbone = build(self.cfg.backbone)
+        self.decoder = build(self.cfg.decoder)
+        self.neck = build(self.cfg.neck)
+        self.text_encoder = build(self.cfg.text_encoder)
+        self.feature_enhancer = build(self.cfg.feature_enhancer)
+        self.spatial_enhancer = build(self.cfg.spatial_enhancer)
+        self.data_preprocessor = build(self.cfg.data_preprocessor)
+        self.backbone_3d = build(self.cfg.backbone_3d)
+        self.neck_3d = build(self.cfg.neck_3d)
+        self.input_2d = self.cfg.input_2d
+        self.input_3d = self.cfg.input_3d
+        self.embed_dims = self.cfg.embed_dims
+        self.pre_spatial_enhancer = self.cfg.pre_spatial_enhancer
+
+        if self.cfg.text_encoder is not None:
             self.text_feat_map = nn.Linear(
-                self.text_encoder.language_backbone.body.language_dim,
+                self.text_encoder.language_backbone.body.language_dim,  # type: ignore
                 self.embed_dims,
                 bias=True,
             )
@@ -106,7 +102,8 @@ class BIP3D(nn.Module):
             return self.predict(inputs)
 
     def loss(self, inputs):
-        model_outs, text_dict, loss_depth = self._forward(inputs)
+        assert self.training, "Requried training mode"
+        model_outs, text_dict, loss_depth = self._forward(inputs)  # type: ignore
         loss = self.decoder.loss(model_outs, inputs, text_dict=text_dict)
         if loss_depth is not None:
             loss["loss_depth"] = loss_depth
@@ -114,7 +111,8 @@ class BIP3D(nn.Module):
 
     @torch.no_grad()
     def predict(self, inputs):
-        model_outs, text_dict = self._forward(inputs)
+        assert not self.training, "Required evaluation mode"
+        model_outs, text_dict = self._forward(inputs)  # type: ignore
         results = self.decoder.post_process(
             model_outs, inputs, text_dict=text_dict
         )
@@ -139,7 +137,7 @@ class BIP3D(nn.Module):
                 text_dict=text_dict,
                 inputs=inputs,
             )
-            text_dict["embedded"] = text_feature
+            text_dict["embedded"] = text_feature  # type: ignore
         if self.spatial_enhancer is not None and not self.pre_spatial_enhancer:
             feature_maps, depth_prob, loss_depth = self.spatial_enhancer(
                 feature_maps=feature_maps,
@@ -159,3 +157,23 @@ class BIP3D(nn.Module):
         if self.training:
             return model_outs, text_dict, loss_depth
         return model_outs, text_dict
+
+
+MODULE_TPYE = TorchModuleCfgType_co | DelayInitDictType  # noqa: E501
+
+
+class BIP3DConfig(TorchModuleCfg[BIP3D]):
+    class_type: ClassType_co[BIP3D] = BIP3D
+    backbone: MODULE_TPYE  # type: ignore
+    decoder: MODULE_TPYE  # type: ignore
+    neck: MODULE_TPYE | None = None
+    text_encoder: MODULE_TPYE | None = None
+    feature_enhancer: MODULE_TPYE | None = None
+    spatial_enhancer: MODULE_TPYE | None = None
+    data_preprocessor: MODULE_TPYE | None = None
+    backbone_3d: MODULE_TPYE | None = None
+    neck_3d: MODULE_TPYE | None = None
+    input_2d: str = "imgs"
+    input_3d: str = "depths"
+    embed_dims: int = 256
+    pre_spatial_enhancer: bool = False

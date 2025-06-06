@@ -19,6 +19,15 @@ repos:
 
   - repo: local
     hooks:
+      - id: check-merge-conflict
+        name: Check merge conflict
+        description: Prevent unresolve conflict
+        entry: check-merge-conflict
+        language: system
+        args: [--assume-in-merge]
+
+  - repo: local
+    hooks:
       - id: ruff-python
         name: ruff-change-exclude-docs
         description: Check python doc style.

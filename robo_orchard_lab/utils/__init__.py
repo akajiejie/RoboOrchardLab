@@ -1,6 +1,6 @@
 # Project RoboOrchard
 #
-# Copyright (c) 2024 Horizon Robotics. All Rights Reserved.
+# Copyright (c) 2024-2025 Horizon Robotics. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -16,6 +16,7 @@
 
 from . import huggingface
 from .build import build
+from .env import set_env
 from .geometry import depth_to_range_image, mask_points
 from .logging import basic_config as log_basic_config
 from .misc import as_sequence, stack_batch, to_tensor
