@@ -30,12 +30,13 @@ config = dict(
     save_step_freq=4000,
     num_workers=8,
     lr=1e-4,
-    task_names=["shoe_place"],
+    task_names=["blocks_stack_three"],
     checkpoint="./ckpt/groundingdino_swint_ogc_mmdet-822d7e9d-rename.pth",
     bert_checkpoint="./ckpt/bert-base-uncased",
-    data_path="./data/robotwin_main/lmdb",
+    data_path="./data/lmdb",
     urdf="./urdf/arx5/arx5_description_isaac.urdf",
-    multi_task=True,
+    multi_task=False,
+    scale_shift_version="single_task_blocks_stack_three",
 )
 
 
@@ -439,24 +440,47 @@ def build_transforms(config):
             embodiedment_mat=torch.float32,
         )
     )
+
+    if config["scale_shift_version"] == "main":
+        scale_shift_list = [
+            [1.12735104, -0.11648428],
+            [1.45046443, 1.35436516],
+            [1.5324732, 1.45750941],
+            [1.80842297, -0.01855904],
+            [1.46318083, 0.16631192],
+            [2.79637467, 0.24332368],
+            [0.0325, 0.0125],
+            [1.12735104, -0.11648428],
+            [1.45046443, 1.35436516],
+            [1.5324732, 1.45750941],
+            [1.80842297, -0.01855904],
+            [1.46318083, 0.16631192],
+            [2.79637467, 0.24332368],
+            [0.0325, 0.0125],
+        ]
+    elif config["scale_shift_version"] == "single_task_blocks_stack_three":
+        scale_shift_list = [
+            [0.82115489, 0.00280333],
+            [1.26673863, 1.26673677],
+            [1.38083194, 1.38080194],
+            [0.94487381, -0.94485653],
+            [0.13566405, 0.05423572],
+            [0.90747011, 0.05119371],
+            [0.425, 0.575],
+            [0.82115489, 0.00280333],
+            [1.26673863, 1.26673677],
+            [1.38083194, 1.38080194],
+            [0.94487381, -0.94485653],
+            [0.13566405, 0.05423572],
+            [0.90747011, 0.05119371],
+            [0.425, 0.575],
+        ]
+    else:
+        raise NotImplementedError
+
     kinematics = DualArmKinematics(urdf=config["urdf"])
     scale_shift = AddScaleShift(
-        scale_shift=[
-            [1.12735104, -0.11648428],
-            [1.45046443, 1.35436516],
-            [1.5324732, 1.45750941],
-            [1.80842297, -0.01855904],
-            [1.46318083, 0.16631192],
-            [2.79637467, 0.24332368],
-            [0.0325, 0.0125],
-            [1.12735104, -0.11648428],
-            [1.45046443, 1.35436516],
-            [1.5324732, 1.45750941],
-            [1.80842297, -0.01855904],
-            [1.46318083, 0.16631192],
-            [2.79637467, 0.24332368],
-            [0.0325, 0.0125],
-        ],
+        scale_shift=scale_shift_list,
     )
     joint_state_noise = JointStateNoise(
         noise_range=[

@@ -92,6 +92,7 @@ class RoboTwinLmdbDataset(BaseLmdbManipulationDataset):
         "put_bottles_dustbin": "Put the bottles into the dustbin.",
         "bowls_stack": "Stack the bowls together and put them in a specific spot.",  # noqa: E501
         "classify_tactile": "Classify the block according to its shapes and put them in the corresponding positions.",  # noqa: E501
+        "others": "Complete all the tasks you see",
     }
 
     def __init__(
@@ -231,7 +232,10 @@ class RoboTwinLmdbDataset(BaseLmdbManipulationDataset):
         if self.load_depth:
             data["depths"] = depths
 
-        instructions = self.instructions[task_name]
+        instructions = self.instructions.get(
+            task_name,
+            self.DEFAULT_INSTRUCTIONS["others"],
+        )
         if isinstance(instructions, str):
             text = instructions
         elif len(instructions) == 0:

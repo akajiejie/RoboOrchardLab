@@ -39,8 +39,10 @@ def test_robotwin_lmdb_data_packer(
                     "robo_orchard_lab/dataset/robotwin/robotwin_packer.py",
                     f"--input_path {test_data_path}",
                     f"--output_path {workspace_root}",
-                    f"--seed_dir {test_data_path}/seeds",
-                    "--task_names shoe_place",
+                    "--task_names blocks_stack_three",
+                    "--embodiment aloha-agilex-1",
+                    "--robotwin_aug m1_b1_l1_h0.03_c0",
+                    "--camera_name D435",
                 ]
             ),
         )

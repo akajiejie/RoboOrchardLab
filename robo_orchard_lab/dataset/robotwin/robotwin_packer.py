@@ -16,9 +16,9 @@
 
 import logging
 import os
-import pickle
 
 import cv2
+import h5py
 import numpy as np
 
 from robo_orchard_lab.dataset.lmdb.base_lmdb_dataset import (
@@ -29,72 +29,68 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
 
+def images_decoding(padded_data):
+    decoded_imgs = []
+    for jpeg_data in padded_data:
+        img_array = np.frombuffer(jpeg_data, dtype=np.uint8)
+        img = cv2.imdecode(img_array, cv2.IMREAD_COLOR)
+        decoded_imgs.append(img)
+    return decoded_imgs
+
+
 class RobotwinDataPacker(BaseLmdbManipulationDataPacker):
     def __init__(
         self,
         input_path,
         output_path,
-        seed_dir,
         task_names=None,
         embodiment=None,
+        robotwin_aug=None,
+        camera_name=None,
+        setting=None,
         simulation=True,
         **kwargs,
     ):
         super().__init__(input_path, output_path, **kwargs)
-        self.seed_dir = seed_dir
         self.task_names = task_names
         self.embodiment = embodiment
+        self.robotwin_aug = robotwin_aug
+        self.camera_name = camera_name
         self.simulation = simulation
         self.episodes = self.input_path_handler(self.input_path)
 
     def _check_valid(self, input_path, task_dir):
         if not os.path.isdir(os.path.join(input_path, task_dir)):
-            return None, None, None
+            return None, None, None, None
 
-        if task_dir.endswith("_pkl"):
-            camera_name = task_dir.split("_")[-2]
-            task_name = task_dir.replace(f"_{camera_name}_pkl", "")
-        else:
-            camera_name = task_dir.split("_")[-1]
-            task_name = task_dir.replace(f"_{camera_name}", "")
+        if task_dir not in self.task_names:
+            return None, None, None, None
 
-        valid_seed_file = None
-        for seed_file in os.listdir(self.seed_dir):
-            if self.embodiment is not None:
-                if seed_file == f"{task_name}_{self.embodiment}.txt":
-                    valid_seed_file = seed_file
-                    break
-            elif seed_file == f"{task_name}.txt":
-                valid_seed_file = seed_file
-                break
-        return camera_name, task_name, valid_seed_file
+        setting = f"{self.embodiment}-{self.robotwin_aug}_{self.camera_name}"
+        task_name = task_dir
+        valid_seed_file = os.path.join(
+            input_path, task_name, setting, "seed.txt"
+        )
+        return self.camera_name, task_name, valid_seed_file, setting
 
     def input_path_handler(self, input_path):
         episodes = []
         for task_dir in os.listdir(input_path):
-            camera_name, task_name, valid_seed_file = self._check_valid(
-                input_path, task_dir
+            camera_name, task_name, valid_seed_file, setting = (
+                self._check_valid(input_path, task_dir)
             )
             if valid_seed_file is None:
                 logger.warning(f"invalid task dir: {task_dir}")
                 continue
 
-            seeds = (
-                open(os.path.join(self.seed_dir, valid_seed_file), "r")
-                .read()
-                .strip()
-                .split(" ")
-            )
-            if (
-                self.task_names is not None
-                and task_name not in self.task_names
-            ):
-                continue
-            for ep in os.listdir(os.path.join(input_path, task_dir)):
-                ep_path = os.path.join(input_path, task_dir, ep)
-                if not (ep.startswith("episode") and os.path.isdir(ep_path)):
+            seeds = open(valid_seed_file, "r").read().strip().split(" ")
+            current_path = os.path.join(input_path, task_dir, setting)
+
+            for ep in os.listdir(current_path):
+                if not ep.endswith(".hdf5"):
                     continue
-                ep_id = int(ep.replace("episode", ""))
+                ep_path = os.path.join(current_path, ep)
+                ep_id = int(ep.replace("episode", "").replace(".hdf5", ""))
                 seed = seeds[ep_id]
                 episodes.append([task_name, camera_name, ep_path, seed])
         episodes.sort(key=lambda x: (x[0], x[1], int(x[3])))  # sort by seed
@@ -117,55 +113,37 @@ class RobotwinDataPacker(BaseLmdbManipulationDataPacker):
             rgbs = {}
             depths = {}
 
-            frame_data_files = [
-                x for x in os.listdir(ep_path) if x.endswith(".pkl")
-            ]
-            frame_data_files.sort(key=lambda x: int(x[:-4]))
-            for pkl in frame_data_files:
-                try:
-                    pkl_file = os.path.join(ep_path, pkl)
-                    frame_data = pickle.load(open(pkl_file, "rb"))
-                except Exception:
-                    logger.warning(f"invalid pkl file: {pkl_file}")
-                    continue
+            with h5py.File(ep_path, "r") as ep_file:
+                # read cartesian positions
+                cartesian_positions = ep_file["endpose"][:]
 
+                # read joint positions
+                joint_positions = ep_file["joint_action"]["vector"][:]
+
+                # read camera data
                 camera_names = []
-                for camera, obs in frame_data["observation"].items():
-                    camera_names.append(camera)
+                for camera_name, camera_data in ep_file["observation"].items():
+                    camera_names.append(camera_name)
+                    intrinsics[camera_name] = camera_data["intrinsic_cv"][0]
+                    extrinsics[camera_name] = camera_data["extrinsic_cv"][:]
 
-                    rgb = obs["rgb"]
-                    assert rgb.shape[-1] == 3 and len(rgb.shape) == 3
-                    ret, rgb = cv2.imencode(".JPEG", rgb)
-                    assert ret
+                    rgbs_encode = camera_data["rgb"][:]
 
-                    depth = obs["depth"]
-                    assert len(depth.shape) == 2
-                    depth = depth.astype(np.uint16)
-                    ret, depth = cv2.imencode(".PNG", depth)
-                    assert ret
+                    depths_raw = camera_data["depth"][:]
+                    depths_encode = []
+                    for depth in depths_raw:
+                        assert len(depth.shape) == 2
+                        depth = depth.astype(np.uint16)
+                        ret, depth = cv2.imencode(".PNG", depth)
+                        assert ret
+                        depths_encode.append(depth)
 
-                    if camera not in intrinsics:
-                        intrinsics[camera] = obs["intrinsic_cv"]
-                        extrinsics[camera] = []
-                        rgbs[camera] = []
-                        depths[camera] = []
-                    else:
-                        assert (
-                            intrinsics[camera] == obs["intrinsic_cv"]
-                        ).all()
+                    rgbs[camera_name] = rgbs_encode
+                    depths[camera_name] = depths_encode
 
-                    extrinsics[camera].append(obs["extrinsic_cv"])
-                    rgbs[camera].append(rgb)
-                    depths[camera].append(depth)
-
-                joint_positions.append(frame_data["joint_action"])
-                cartesian_positions.append(frame_data["endpose"])
-                num_steps += 1
+            num_steps = len(cartesian_positions)
 
             for camera in camera_names:
-                assert len(extrinsics[camera]) == num_steps
-                extrinsics[camera] = np.stack(extrinsics[camera])
-
                 assert len(rgbs[camera]) == num_steps
                 assert len(depths[camera]) == num_steps
                 for i, (rgb, depth) in enumerate(
@@ -198,6 +176,7 @@ class RobotwinDataPacker(BaseLmdbManipulationDataPacker):
                 seeed=seed,
                 camera_type=camera_type,
                 simulation=True,
+                embodiment=self.embodiment,
             )
             self.meta_pack_file.write(f"{uuid}/meta_data", index_data)
             self.write_index(ep_id, index_data)
@@ -222,9 +201,10 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--input_path", type=str)
     parser.add_argument("--output_path", type=str)
-    parser.add_argument("--seed_dir", type=str)
     parser.add_argument("--task_names", type=str, default=None)
     parser.add_argument("--embodiment", type=str, default=None)
+    parser.add_argument("--robotwin_aug", type=str, default=None)
+    parser.add_argument("--camera_name", type=str, default=None)
     args = parser.parse_args()
 
     if args.task_names is None:
@@ -235,8 +215,9 @@ if __name__ == "__main__":
     packer = RobotwinDataPacker(
         input_path=args.input_path,
         output_path=args.output_path,
-        seed_dir=args.seed_dir,
         task_names=task_names,
         embodiment=args.embodiment,
+        robotwin_aug=args.robotwin_aug,
+        camera_name=args.camera_name,
     )
     packer()

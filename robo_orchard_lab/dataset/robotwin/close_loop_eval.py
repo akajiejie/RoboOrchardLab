@@ -15,17 +15,33 @@
 # permissions and limitations under the License.
 
 import copy
-import logging
+import importlib
 import os
 
 import cv2
 import numpy as np
 import torch
+import yaml
 
-logger = logging.getLogger(__name__)
+
+def get_embodiment_config(robot_file):
+    robot_config_file = os.path.join(robot_file, "config.yml")
+    with open(robot_config_file, "r", encoding="utf-8") as f:
+        embodiment_args = yaml.load(f.read(), Loader=yaml.FullLoader)
+    return embodiment_args
 
 
-def close_loop_data_process(dataset, obs, task_name, joint_state):
+def class_decorator(task_name):
+    envs_module = importlib.import_module(f"envs.{task_name}")
+    try:
+        env_class = getattr(envs_module, task_name)
+        env_instance = env_class()
+    except AttributeError:
+        raise SystemExit(f"No Task, {task_name}")
+    return env_instance
+
+
+def deploy_data_process(dataset, obs, task_name, joint_state=None):
     images = []
     depths = []
     T_world2cam = []
@@ -44,7 +60,7 @@ def close_loop_data_process(dataset, obs, task_name, joint_state):
         _tmp[:3, :3] = camera_data["intrinsic_cv"]
         intrinsic.append(_tmp)
 
-    joint_state.append(obs["joint_action"])
+    joint_state.append(obs["joint_action"]["vector"])
     data = dict(
         intrinsic=np.stack(intrinsic),
         T_world2cam=np.stack(T_world2cam),
@@ -59,7 +75,10 @@ def close_loop_data_process(dataset, obs, task_name, joint_state):
     if dataset.load_depth:
         data["depths"] = np.stack(depths)
 
-    instructions = dataset.instructions[task_name]
+    instructions = dataset.instructions.get(
+        task_name,
+        dataset.DEFAULT_INSTRUCTIONS["others"],
+    )
     if isinstance(instructions, str):
         text = instructions
     elif len(instructions) == 0:
@@ -80,202 +99,105 @@ def close_loop_data_process(dataset, obs, task_name, joint_state):
     return data, joint_state
 
 
-def evaluation(env, model, dataset, seed, save_path=None):
-    task_name = env.__class__.__name__
-    num_left_joints = len(env.left_arm_joint_id)
-    num_right_joints = len(env.right_arm_joint_id)
+def update_task_config(task_args, CONFIGS_PATH):
+    embodiment_type = task_args.get("embodiment")
+    embodiment_config_path = os.path.join(
+        CONFIGS_PATH, "_embodiment_config.yml"
+    )
 
-    env._update_render()
-    if env.render_freq:
-        env.viewer.render()
-    env.actor_pose = True
-    success_flag = False
-    left_gripper_joint_id = [34, 35]
-    right_gripper_joint_id = [36, 37]
-    gripper_velocity = 0.05
+    with open(embodiment_config_path, "r", encoding="utf-8") as f:
+        _embodiment_types = yaml.load(f.read(), Loader=yaml.FullLoader)
 
-    video_writer = None
+    def get_embodiment_file(embodiment_type):
+        robot_file = _embodiment_types[embodiment_type]["file_path"]
+        if robot_file is None:
+            raise ValueError("No embodiment files")
+        return robot_file
 
-    def visualize(data, video_writer):
-        if save_path is None:
-            return
-        if not os.path.exists(save_path):
-            os.makedirs(save_path, exist_ok=True)
+    with open(CONFIGS_PATH + "_camera_config.yml", "r", encoding="utf-8") as f:
+        _camera_config = yaml.load(f.read(), Loader=yaml.FullLoader)
 
-        imgs = data["imgs"].cpu().numpy()[0]
-        imgs = np.concatenate(
-            [
-                np.concatenate([imgs[0], imgs[3]], axis=1),
-                np.concatenate([imgs[1], imgs[2]], axis=1),
-            ],
-            axis=0,
+    head_camera_type = task_args["camera"]["head_camera_type"]
+    task_args["head_camera_h"] = _camera_config[head_camera_type]["h"]
+    task_args["head_camera_w"] = _camera_config[head_camera_type]["w"]
+
+    task_args["left_robot_file"] = get_embodiment_file(embodiment_type[0])
+    task_args["right_robot_file"] = get_embodiment_file(embodiment_type[0])
+    task_args["dual_arm_embodied"] = True
+
+    task_args["left_embodiment_config"] = get_embodiment_config(
+        task_args["left_robot_file"]
+    )
+    task_args["right_embodiment_config"] = get_embodiment_config(
+        task_args["right_robot_file"]
+    )
+    return task_args
+
+
+def visualize(data, video_writer, task_env, save_path):
+    if save_path is None:
+        return
+    if not os.path.exists(save_path):
+        os.makedirs(save_path, exist_ok=True)
+
+    imgs1 = np.concatenate(
+        [
+            data["observation"]["head_camera"]["rgb"],
+            data["observation"]["front_camera"]["rgb"],
+        ],
+        axis=1,
+    )
+    imgs2 = np.concatenate(
+        [
+            data["observation"]["left_camera"]["rgb"],
+            data["observation"]["right_camera"]["rgb"],
+        ],
+        axis=1,
+    )
+    imgs = np.concatenate([imgs1, imgs2], axis=0)
+
+    if video_writer is None:
+        file = os.path.join(save_path, f"episodes_test{task_env.test_num}.mp4")
+        print(f"visualization result: {file}")
+        fourcc = cv2.VideoWriter_fourcc(*"mp4v")
+        video_writer = cv2.VideoWriter(
+            file,
+            fourcc,
+            20,
+            imgs.shape[:2][::-1],
         )
+    video_writer.write(np.uint8(imgs)[..., ::-1])
+    return video_writer
 
-        env.observer_camera.take_picture()
-        observer_img = env._get_camera_rgba(env.observer_camera)[..., :3]
-        scale = imgs.shape[0] / observer_img.shape[0]
-        observer_img = cv2.resize(
-            observer_img, (int(scale * observer_img.shape[1]), imgs.shape[0])
-        )
-        imgs = np.concatenate([imgs, observer_img], axis=1)
 
-        if video_writer is None:
-            file = os.path.join(save_path, f"{task_name}_seed{seed}.mp4")
-            logger.info(f"visualization result: {file}")
-            fourcc = cv2.VideoWriter_fourcc(*"mp4v")
-            video_writer = cv2.VideoWriter(
-                file,
-                fourcc,
-                20,
-                imgs.shape[:2][::-1],
-            )
-        video_writer.write(np.uint8(imgs)[..., ::-1])
-        return video_writer
-
-    step_cnt = 0
+def evaluation(task_env, model, dataset, save_path):
+    succ = False
     joint_state = []
-    while step_cnt < env.step_lim:
-        obs = env.get_obs()
-        data, joint_state = close_loop_data_process(
-            dataset, obs, task_name, joint_state
+    task_name = task_env.task_name
+    video_writer = None
+    while task_env.take_action_cnt < task_env.step_lim:
+        # get model input
+        observation = task_env.get_obs()
+        data, joint_state = deploy_data_process(
+            dataset, observation, task_name, joint_state
         )
-        video_writer = visualize(data, video_writer)
-        actions = model(data)[0]["pred_actions"][0]
 
+        # get action chunk
+        actions = model(data)[0]["pred_actions"][0]
         valid_action_step = 32
         actions = actions[:valid_action_step, :, 0].cpu().numpy()
-        current_joint_state = obs["joint_action"]
-        actions = np.concatenate([current_joint_state[None], actions])
 
-        left_gripper_pos = actions[:, num_left_joints]
-        right_gripper_pos = actions[:, num_left_joints + num_right_joints + 1]
-        left_arm_pos = actions[:, :num_left_joints]
-        right_arm_pos = actions[
-            :, num_left_joints + 1 : num_left_joints + num_right_joints + 1
-        ]
-
-        try:
-            left_arm_pos, left_arm_vel = env.left_planner.TOPP(
-                left_arm_pos, 1 / 250, verbose=True
-            )[1:3]
-            left_n_step = left_arm_pos.shape[0]
-            left_step_idx = 0
-        except Exception:
-            left_n_step = left_step_idx = 1
-
-        try:
-            right_arm_pos, right_arm_vel = env.right_planner.TOPP(
-                right_arm_pos,
-                1 / 250,
-                verbose=True,
-            )[1:3]
-            right_n_step = right_arm_pos.shape[0]
-            right_step_idx = 0
-        except Exception:
-            right_n_step = right_step_idx = 1
-
-        n_step = max(left_n_step, right_n_step)
-        action_freq = n_step // actions.shape[0]
-
-        step_idx = 0
-        while left_step_idx < left_n_step or right_step_idx < right_n_step:
-            qf = env.robot.compute_passive_force(
-                gravity=True, coriolis_and_centrifugal=True
+        # take action
+        for action in actions:
+            observation = task_env.get_obs()
+            video_writer = visualize(
+                observation, video_writer, task_env, save_path
             )
-            env.robot.set_qf(qf)
-            if left_step_idx / left_n_step <= right_step_idx / right_n_step:
-                for j in range(num_left_joints):
-                    left_j = env.left_arm_joint_id[j]
-                    env.active_joints[left_j].set_drive_target(
-                        left_arm_pos[left_step_idx][j]
-                    )
-                    env.active_joints[left_j].set_drive_velocity_target(
-                        left_arm_vel[left_step_idx][j]
-                    )
-                if not env.fix_gripper:
-                    for joint_id in left_gripper_joint_id:
-                        gripper_idx = min(
-                            left_step_idx // action_freq,
-                            left_gripper_pos.shape[0] - 1,
-                        )
-                        env.active_joints[joint_id].set_drive_target(
-                            left_gripper_pos[gripper_idx]
-                        )
-                        env.active_joints[joint_id].set_drive_velocity_target(
-                            gripper_velocity
-                        )
-                        env.left_gripper_val = left_gripper_pos[gripper_idx]
-                left_step_idx += 1
+            task_env.take_action(action)
 
-            if left_step_idx / left_n_step >= right_step_idx / right_n_step:
-                for j in range(num_right_joints):
-                    right_j = env.right_arm_joint_id[j]
-                    env.active_joints[right_j].set_drive_target(
-                        right_arm_pos[right_step_idx][j]
-                    )
-                    env.active_joints[right_j].set_drive_velocity_target(
-                        right_arm_vel[right_step_idx][j]
-                    )
-                if not env.fix_gripper:
-                    for joint_id in right_gripper_joint_id:
-                        gripper_idx = min(
-                            right_step_idx // action_freq,
-                            right_gripper_pos.shape[0] - 1,
-                        )
-                        env.active_joints[joint_id].set_drive_target(
-                            right_gripper_pos[gripper_idx]
-                        )
-                        env.active_joints[joint_id].set_drive_velocity_target(
-                            gripper_velocity
-                        )
-                        env.right_gripper_val = right_gripper_pos[gripper_idx]
-                right_step_idx += 1
-
-            env.scene.step()
-            env._update_render()
-            if (step_idx + 1) % action_freq == 0:
-                if env.render_freq:
-                    env.viewer.render()
-                obs = env.get_obs()
-                data, joint_state = close_loop_data_process(
-                    dataset, obs, task_name, joint_state
-                )
-                video_writer = visualize(data, video_writer)
-                step_cnt += 1
-
-            step_idx += 1
-            if env.check_success():
-                success_flag = True
-                break
-
-            if not env.actor_pose:
-                break
-
-            if step_idx >= action_freq * valid_action_step:
-                break
-
-        if step_idx % max(action_freq, 1) != 0:
-            env._update_render()
-            if env.render_freq:
-                env.viewer.render()
-            obs = env.get_obs()
-            data, joint_state = close_loop_data_process(
-                dataset, obs, task_name, joint_state
-            )
-            video_writer = visualize(data, video_writer)
-            step_cnt += 1
-
-        logger.info(f"step: {step_cnt} / {env.step_lim}")
-        if success_flag:
-            if video_writer is not None:
-                video_writer.release()
-            logger.info(f"seed {seed}: success!")
-            return True
-
-        if not env.actor_pose:
+        if task_env.eval_success:
+            succ = True
             break
-
     if video_writer is not None:
         video_writer.release()
-    logger.info(f"seed {seed}: fail!")
-    return False
+    return succ

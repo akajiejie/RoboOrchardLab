@@ -21,12 +21,18 @@ import os
 import sys
 
 import yaml
+from safetensors.torch import load_model
 from utils import load_config  # type: ignore
 
-from robo_orchard_lab.dataset.robotwin.close_loop_eval import evaluation
-from robo_orchard_lab.utils import build, log_basic_config
+from robo_orchard_lab.dataset.robotwin.close_loop_eval import (
+    class_decorator,
+    evaluation,
+    update_task_config,
+)
+from robo_orchard_lab.utils import log_basic_config
 
 logger = logging.getLogger(__file__)
+logging.disable(logging.CRITICAL)
 
 
 def main(args):
@@ -35,13 +41,13 @@ def main(args):
     build_dataset = config.build_dataset
     config = config.config
 
-    logger.info("\n" + json.dumps(config, indent=4))
+    print("\n" + json.dumps(config, indent=4))
 
     model = build_model(config)
     checkpoint = args.checkpoint
     if checkpoint is None:
         checkpoint = config.get("checkpoint")
-    # load_checkpoint(model, checkpoint)
+    load_model(model, checkpoint)
     model.eval()
     model.requires_grad_()
     model.cuda()
@@ -56,7 +62,7 @@ def main(args):
     else:
         task_names = args.task_names.split(",")
 
-    logger.info(f"eval tasks: {task_names}")
+    print(f"eval tasks: {task_names}")
     for task_name in task_names:
         workspace = os.path.abspath(os.path.join(args.workspace, task_name))
         if not os.path.exists(workspace):
@@ -69,32 +75,15 @@ def main(args):
         ) as f:
             task_config = yaml.load(f.read(), Loader=yaml.FullLoader)
 
-        with open(
-            "./task_config/_camera_config.yml", "r", encoding="utf-8"
-        ) as f:
-            camera_configs = yaml.load(f.read(), Loader=yaml.FullLoader)
+        from envs import CONFIGS_PATH
 
-        for key in list(task_config.keys()):
-            if not key.endswith("_camera_type"):
-                continue
-            if args.camera_type is not None:
-                task_config[key] = args.camera_type
+        task_config = update_task_config(task_config, CONFIGS_PATH)
 
-            camera_config = camera_configs[task_config[key]]
-            camera_name = key.replace("_camera_type", "")
-            task_config[f"{camera_name}_camera_fovy"] = camera_config["fovy"]
-            task_config[f"{camera_name}_camera_w"] = camera_config["w"]
-            task_config[f"{camera_name}_camera_h"] = camera_config["h"]
-            logger.info(
-                f"{camera_name} -- type: {task_config[key]}, "
-                f"fovy: {camera_config['fovy']}, "
-                f"camera_w: {camera_config['w']}, "
-                f"camera_h: {camera_config['h']}"
-            )
-        logger.info(f"task_name: {task_name}")
-        logger.info(f"num_test: {args.num_test}")
+        print(f"task_name: {task_name}")
+        print(f"num_test: {args.num_test}")
 
-        task_env = build(dict(type=f"envs.{task_name}:{task_name}"))
+        task_env = class_decorator(task_name)
+        task_env.test_num = 0
 
         seed = args.start_seed
         render_freq = task_config["render_freq"]
@@ -119,28 +108,29 @@ def main(args):
                         seed += 1
                         continue
                 except Exception as e:
-                    logger.info(f"expert failed at seed[{seed}]: {e}")
+                    print(f"expert failed at seed[{seed}]: {e}")
                     task_env.close()
                     seed += 1
                     continue
 
             task_config["render_freq"] = render_freq
+            task_config["eval_mode"] = True
             task_env.setup_demo(
                 now_ep_num=len(results), seed=seed, is_test=True, **task_config
             )
-            eval_result = evaluation(
-                task_env, model, val_dataset, seed, workspace
-            )
+
+            eval_result = evaluation(task_env, model, val_dataset, workspace)
             task_env.close()
             results[seed] = eval_result
             num_success += eval_result
 
             if task_env.render_freq:
                 task_env.viewer.close()
-            logger.info(
+            print(
                 f"seed[{seed}]: {'success' if eval_result else 'fail'}, "
                 f"success rate: {num_success}/{len(results)}"
             )
+            task_env.test_num += 1
             seed += 1
 
         results["success_rate"] = num_success / len(results)

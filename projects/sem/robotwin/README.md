@@ -59,6 +59,7 @@ accelerate==1.4.0
 diffusers==0.32.2 
 timeout-decorator==0.5.0
 requests==2.32.3 
+h5py==3.13.0
 ```
 
 
@@ -68,10 +69,10 @@ First, run RoboTwin to obtain the expert data from the simulation.
 ```bash
 git clone https://github.com/TianxingChen/RoboTwin.git
 cd RoboTwin
+git checkout CVPR-Challenge-2025-Round2
 
 # Follow the instructions in the RobotWin code repository to download the required assets
-python3 script/download_asset.py  # main branch
-# python3 assets/_download.py or
+python3 assets/_download.py
 
 # generate data
 bash run_task.sh ${task_name} ${gpu_id}
@@ -84,7 +85,10 @@ cd path/to/robo_orchard_lab
 python robo_orchard_lab/dataset/robotwin/robotwin_packer.py \
     --input_path path/to/robotwin_data \
     --output_path "prjects/sem_robotwin/data/lmdb" \
-    --seed_dir path/to/robotwin_data_seeds
+    --task_names ${task_names} \
+    --embodiment aloha-agilex-1 \
+    --robotwin_aug m1_b1_l1_h0.03_c0 \
+    --camera_name D435
 ```
 
 Make sure the resulting data path is as follows:
@@ -123,7 +127,7 @@ accelerate launch  \
     --config ${CONFIG}
 
 # eval with single-gpu
-eval_tasks="blocks_stack_hard"
+eval_tasks="blocks_stack_three"
 python3 robotwin_eval.py \
     --config config_sem_robotwin.py \
     --task_name ${eval_tasks} \
