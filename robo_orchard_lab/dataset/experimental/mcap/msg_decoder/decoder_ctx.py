@@ -22,6 +22,9 @@ from mcap.records import (
     Message as McapMessage,
     Schema,
 )
+from robo_orchard_lab.dataset.experimental.mcap.msg_decoder.factory import (
+    DecoderFactoryWithConverter,
+)
 
 __all__ = ["McapDecoderContext"]
 
@@ -39,6 +42,17 @@ class McapDecoderContext:
         self,
         decoder_factories: Iterable[McapDecoderFactory] = (),
     ):
+        cnt = 0
+        for factory in decoder_factories:
+            if not isinstance(factory, McapDecoderFactory):
+                raise TypeError(
+                    f"Expected McapDecoderFactory, got {type(factory)}"
+                )
+            cnt += 1
+
+        if cnt == 0:
+            decoder_factories = (DecoderFactoryWithConverter(),)
+
         self._decoder_factories = decoder_factories
         self._decoders: dict[int, Callable[[bytes], Any]] = {}
 

@@ -17,7 +17,9 @@ dependencies = [
     # metric
     "torchmetrics>=1.6",
     # robo orchard
-    "robo_orchard_core>=0.1.0",
+    # "robo_orchard_core>=0.1.0", # This should be used in release version.
+    # use git url to install the latest version. This is for non-release version only. 
+    "robo_orchard_core@git+https://github.com/HorizonRobotics/robo_orchard_core.git@ace5e73f8a09b2a180134bf9ff32d4a80d68e0bf",
 ]
 license = "Apache-2.0"
 license-files = ["LICENSE", "NOTICE"]
@@ -43,6 +45,7 @@ mcap_datasets = [
     "foxglove-schemas-protobuf>=0.3.0",
     "opencv-python",
     "datasets>=3.2.0",
+    "robo_orchard_schemas@git+https://github.com/HorizonRobotics/robo_orchard_schemas.git@5e213f713f29398d2c631afc8e2d42bf1474b2c8",
 ]
 all = ["robo_orchard_lab[bip3d,sem,mcap_datasets]"]
 

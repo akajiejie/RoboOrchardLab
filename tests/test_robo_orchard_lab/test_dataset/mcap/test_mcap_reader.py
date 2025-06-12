@@ -18,22 +18,23 @@ import os
 
 import fsspec
 import pytest
-from mcap_protobuf.decoder import DecoderFactory as McapDecoderFactory
 
-from robo_orchard_lab.dataset.mcap.decoder import (
-    DecoderFactoryWithConverter,
-    McapDecoderContext,
-)
-from robo_orchard_lab.dataset.mcap.msg_converter.compressed_img import (
-    CompressedImage2NumpyConfig,
-    NumpyImageMsg,
-)
-from robo_orchard_lab.dataset.mcap.reader import (
-    MakeIterMsgArgs,
-    McapReader,
+from robo_orchard_lab.dataset.experimental.mcap.batch_split import (
     SplitBatchByTopicArgs,
     SplitBatchByTopics,
     iter_messages_batch,
+)
+from robo_orchard_lab.dataset.experimental.mcap.msg_converter import (
+    CompressedImage2NumpyConfig,
+    NumpyImageMsg,
+)
+from robo_orchard_lab.dataset.experimental.mcap.msg_decoder import (
+    DecoderFactoryWithConverter,
+    McapDecoderContext,
+)
+from robo_orchard_lab.dataset.experimental.mcap.reader import (
+    MakeIterMsgArgs,
+    McapReader,
 )
 
 
@@ -83,7 +84,9 @@ class TestSplitBatchByTopics:
         last_batch_cnt = 0
 
         for batch in iter_messages_batch(
-            example_reader, batch_split=batch_split
+            example_reader,
+            batch_split=batch_split,
+            do_not_split_same_log_time=False,
         ):
             assert last_batch_cnt == 0, (
                 "There should be no batches after the last batch."
@@ -131,7 +134,11 @@ class TestSplitBatchByTopics:
         ]
         batch_split = SplitBatchByTopics(args)
         for i, batch in enumerate(
-            iter_messages_batch(example_reader, batch_split=batch_split)
+            iter_messages_batch(
+                example_reader,
+                batch_split=batch_split,
+                do_not_split_same_log_time=False,
+            )
         ):
             if not batch.is_last_batch:
                 assert len(batch.message_dict[high_frequency_topic]) == 3
@@ -154,9 +161,6 @@ class TestMcapReader:
     def test_decode_message(self, example_reader: McapReader):
         # Test decoding a message from the reader
         factory = DecoderFactoryWithConverter(
-            [
-                McapDecoderFactory(),
-            ],
             converters={
                 "foxglove.CompressedImage": CompressedImage2NumpyConfig(),
             },

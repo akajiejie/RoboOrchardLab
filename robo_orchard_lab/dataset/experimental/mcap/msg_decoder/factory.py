@@ -14,12 +14,12 @@
 # implied. See the License for the specific language governing
 # permissions and limitations under the License.
 
+import warnings
 from typing import Any, Callable, Iterable, Mapping
 
 from mcap.decoder import DecoderFactory as McapDecoderFactory
 from mcap.records import Schema
-
-from robo_orchard_lab.dataset.mcap.msg_converter.base import (
+from robo_orchard_lab.dataset.experimental.mcap.msg_converter import (
     MessageConverter,
     MessageConverterConfig,
     MessageConverterFactoryConfig,
@@ -38,9 +38,11 @@ class DecoderFactoryWithConverter(McapDecoderFactory):
 
 
     Args:
-        decoder_factories (Iterable[McapDecoderFactory]):
+        decoder_factories (Iterable[McapDecoderFactory] | None, optional):
             A list of decoder factories to use for decoding messages.
             The first factory that can decode the message will be used.
+            If None, the default factories for protobuf and ROS2 messages
+            will be used if available. Defaults to None.
 
         converters (Mapping[str, MessageConverterConfig[MessageConverter]] | None):
             A mapping of schema names to message converter configurations.
@@ -50,11 +52,41 @@ class DecoderFactoryWithConverter(McapDecoderFactory):
 
     def __init__(
         self,
-        decoder_factories: Iterable[McapDecoderFactory],
+        decoder_factories: Iterable[McapDecoderFactory] | None = None,
         converters: (
             Mapping[str, MessageConverterConfig[MessageConverter]] | None
         ) = None,
     ):
+        if decoder_factories is None:
+            decoder_factories = []
+            try:
+                from mcap_protobuf.decoder import (
+                    DecoderFactory as McapProtoDecoderFactory,
+                )
+
+                decoder_factories.append(McapProtoDecoderFactory())
+            except ImportError:
+                warning_msg = (
+                    "mcap-protobuf-support is not installed. "
+                    "McapDecoderFactory for protobuf messages "
+                    "will not be available."
+                )
+                warnings.warn(warning_msg, ImportWarning)
+
+            try:
+                from mcap_ros2.decoder import (
+                    DecoderFactory as McapRos2DecoderFactory,
+                )
+
+                decoder_factories.append(McapRos2DecoderFactory())
+            except ImportError:
+                warning_msg = (
+                    "mcap-ros2-support is not installed. "
+                    "McapRos2DecoderFactory for ROS2 messages "
+                    "will not be available."
+                )
+                warnings.warn(warning_msg, ImportWarning)
+
         self.decoder_factories = decoder_factories
         # self.converters = converters or {}
         self.converter_factory = MessageConverterFactoryConfig(

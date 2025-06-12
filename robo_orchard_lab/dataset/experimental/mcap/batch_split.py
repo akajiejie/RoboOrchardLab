@@ -15,14 +15,17 @@
 # permissions and limitations under the License.
 
 from __future__ import annotations
+import warnings
 from abc import ABCMeta, abstractmethod
 from typing import Iterator, Optional, Sequence
 
 from robo_orchard_core.utils.config import Config
 
-from robo_orchard_lab.dataset.mcap.reader.reader import (
-    MakeIterMsgArgs,
+from robo_orchard_lab.dataset.experimental.mcap.data_record import (
     McapMessageBatch,
+)
+from robo_orchard_lab.dataset.experimental.mcap.reader import (
+    MakeIterMsgArgs,
     McapMessageTuple,
     McapReader,
 )
@@ -262,8 +265,22 @@ def iter_messages_batch(
     reader: McapReader,
     batch_split: BatchSplitMixin,
     iter_config: Optional[MakeIterMsgArgs] = None,
+    do_not_split_same_log_time: bool = True,
 ) -> Iterator[McapMessageBatch]:
-    """Iterate over messages in batches."""
+    """Iterate over messages in batches.
+
+    Args:
+        reader (McapReader): The MCAP reader to iterate messages from.
+        batch_split (BatchSplitMixin): The batch splitting logic to apply.
+        iter_config (Optional[MakeIterMsgArgs]): Configuration for message
+            iteration.
+        do_not_split_same_log_time (bool, optional): If True, do not split
+            batches within the same log time. This feature is useful to make
+            sure that the batches are split based on log time. In some cases
+            that split must be done within the same log time, this will
+            trigger a warning and yield the current batch as is. Defaults to
+            True.
+    """
     if iter_config is None:
         iter_config = MakeIterMsgArgs()
 
@@ -279,8 +296,35 @@ def iter_messages_batch(
             # set the last_batch flat to false and
             # return the previous batch
             cur_batch.is_last_batch = False
-            yield cur_batch
-            cur_batch = McapMessageBatch({}, is_last_batch=True)
+            if do_not_split_same_log_time:
+                msg_log_time = msg.message.log_time
+                # it is save to assume that the messages are in
+                # log_time_order, because we have checked
+                # iter_config.log_time_order and iter_config.reverse.
+                to_return, cur_batch = cur_batch.split(
+                    msg_log_time, is_sorted_asc=True
+                )
+                # if have to split the batch within the same log time,
+                # we need to yield the current batch and reset it
+                if to_return is None:
+                    warnings.warn(
+                        "Batch splitting is triggered within the same "
+                        "log time to maintain a valid batch when try not "
+                        "to split within log time. This may lead to "
+                        "unexpected behavior. ",
+                        UserWarning,
+                    )
+                    to_return = cur_batch
+                    cur_batch = McapMessageBatch({}, is_last_batch=True)
+                assert to_return is not None
+                yield to_return
+                if cur_batch is None:
+                    cur_batch = McapMessageBatch({}, is_last_batch=True)
+            else:
+                yield cur_batch
+                cur_batch = McapMessageBatch({}, is_last_batch=True)
+
         cur_batch.append(msg)
 
+    assert cur_batch is not None
     yield cur_batch

@@ -21,14 +21,13 @@ import pyarrow as pa
 import pytest
 from foxglove_schemas_protobuf.CompressedVideo_pb2 import CompressedVideo
 from mcap.reader import make_reader
-from mcap_protobuf.decoder import DecoderFactory as McapDecoderFactory
 
-from robo_orchard_lab.dataset.mcap.decoder import (
-    DecoderFactoryWithConverter,
-)
-from robo_orchard_lab.dataset.mcap.msg_converter.compressed_img import (
+from robo_orchard_lab.dataset.experimental.mcap.msg_converter import (
     CompressedImage2NumpyConfig,
     NumpyImageMsg,
+)
+from robo_orchard_lab.dataset.experimental.mcap.msg_decoder import (
+    DecoderFactoryWithConverter,
 )
 
 
@@ -41,7 +40,7 @@ class TestDecoderFactoryWithConverter:
             "robo_orchard_workspace/mcap/IPRL+7790ec0a+2023-04-21-21h-18m-22s_video.mcap",
         )
         # Create an instance of the DecoderFactoryWithConverter
-        factory = DecoderFactoryWithConverter([McapDecoderFactory()])
+        factory = DecoderFactoryWithConverter()
         # with fsspec.open(mcap_file, "rb") as f:
 
         with pa.memory_map(mcap_file, "r") as f:  # type: ignore
@@ -82,9 +81,6 @@ class TestDecoderFactoryWithConverter:
         # Create an instance of the DecoderFactoryWithConverter
         mcap_file = os.path.join(ROBO_ORCHARD_TEST_WORKSPACE, mcap_file)
         factory = DecoderFactoryWithConverter(
-            [
-                McapDecoderFactory(),
-            ],
             converters={
                 "foxglove.CompressedImage": CompressedImage2NumpyConfig(),
             },

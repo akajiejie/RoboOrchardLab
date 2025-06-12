@@ -18,7 +18,7 @@ else ifeq (${version_type}, rc)
 	VERSION_POSTFIX := .rc${COMMIT_DATETIME}
 	DEPLOY_ENV = test
 else ifeq (${version_type}, local)
-	VERSION_POSTFIX := +local${COMMIT_DATETIME}-${COMMIT_ID}
+	VERSION_POSTFIX := +local${COMMIT_DATETIME}.${COMMIT_ID}
 else ifeq (${version_type}, release)
 	VERSION_POSTFIX :=
 	DEPLOY_ENV = prod

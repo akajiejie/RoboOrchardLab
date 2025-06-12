@@ -16,7 +16,9 @@
 
 from __future__ import annotations
 from dataclasses import dataclass
-from typing import IO, Any, Iterator, Literal, Optional, Sequence
+from typing import IO, Any, Iterator, Optional, Sequence
+
+from robo_orchard_core.utils.config import Config
 
 from mcap.exceptions import McapError
 from mcap.reader import (
@@ -28,15 +30,13 @@ from mcap.records import (
     Message as McapMessage,
     Schema as McapSchema,
 )
-from robo_orchard_core.utils.config import Config
-
-from robo_orchard_lab.dataset.mcap.decoder import McapDecoderContext
+from robo_orchard_lab.dataset.experimental.mcap.msg_decoder import (
+    McapDecoderContext,
+)
 
 __all__ = [
     "McapMessageTuple",
     "McapDecodedMessageTuple",
-    "McapMessagesTuple",
-    "McapMessageBatch",
     "MakeIterMsgArgs",
     "McapReader",
 ]
@@ -73,137 +73,6 @@ class McapDecodedMessageTuple(McapMessageTuple):
                 schema=self.schema,
             )
         return self.decoded_message
-
-
-@dataclass
-class McapMessagesTuple:
-    schema: Optional[McapSchema]
-    channel: McapChannel
-    messages: list[McapMessage]
-
-    def sort(
-        self,
-        key: Literal["log_time", "publish_time"] = "log_time",
-        reverse: bool = False,
-    ) -> None:
-        """Sort the messages by log time."""
-        if key == "log_time":
-            # Sort by log_time, which is an attribute of McapMessage
-            self.messages.sort(key=lambda msg: msg.log_time, reverse=reverse)
-        elif key == "publish_time":
-            # Sort by pub_time, which is an attribute of McapMessage
-            self.messages.sort(
-                key=lambda msg: msg.publish_time, reverse=reverse
-            )
-        else:
-            raise ValueError(
-                f"Invalid sort key: {key}. Use 'log_time' or 'pub_time'."
-            )
-
-    def __getitem__(self, index: int) -> McapMessage:
-        return self.messages[index]
-
-    def __len__(self) -> int:
-        """Return the number of messages in the tuple."""
-        return len(self.messages)
-
-    def append(self, msg: McapMessage | McapMessageTuple) -> None:
-        """Append a new message to the messages tuple."""
-
-        if isinstance(msg, McapMessage):
-            self.messages.append(msg)
-        elif isinstance(msg, McapMessageTuple):
-            # check if the channel matches
-            if self.channel.topic != msg.channel.topic:
-                raise ValueError(
-                    f"Channel mismatch: {self.channel.topic} != {msg.channel.topic}"  # noqa: E501
-                )
-            self.messages.append(msg.message)
-        else:
-            raise TypeError(
-                "msg must be an instance of McapMessage or McapMessageTuple"
-            )
-
-    def decode(self, decoder_ctx: McapDecoderContext) -> list[Any]:
-        """Decode all messages in the tuple using the provided decoder context."""  # noqa: E501
-        decoded_messages = []
-        for msg in self.messages:
-            decoded_message = decoder_ctx.decode_message(
-                message_encoding=self.channel.message_encoding,
-                message=msg,
-                schema=self.schema,
-            )
-            decoded_messages.append(decoded_message)
-        return decoded_messages
-
-
-@dataclass
-class McapMessageBatch:
-    message_dict: dict[str, McapMessagesTuple]
-    is_last_batch: bool = False
-
-    def __contains__(self, topic: str) -> bool:
-        """Check if the topic is in the batch."""
-        return topic in self.message_dict
-
-    def __len__(self) -> int:
-        """Return the total number of messages in the batch."""
-        return sum(
-            len(messages_tuple)
-            for messages_tuple in self.message_dict.values()
-        )
-
-    def append(self, msg: McapMessagesTuple | McapMessageTuple) -> None:
-        """Append a new messages tuple to the batch."""
-        c_id = msg.channel.topic
-
-        if isinstance(msg, McapMessagesTuple):
-            if c_id not in self.message_dict:
-                self.message_dict[c_id] = msg
-            else:
-                self.message_dict[c_id].messages.extend(msg.messages)
-
-        else:
-            if c_id not in self.message_dict:
-                self.message_dict[c_id] = McapMessagesTuple(
-                    schema=msg.schema,
-                    channel=msg.channel,
-                    messages=[msg.message],
-                )
-            else:
-                self.message_dict[c_id].append(msg)
-
-    def decode(self, decoder_ctx: McapDecoderContext) -> dict[str, list[Any]]:
-        """Decode all messages using the provided decoder context."""
-        decoded_batch = {}
-        for c_id, messages_tuple in self.message_dict.items():
-            decoded_messages = messages_tuple.decode(decoder_ctx)
-            decoded_batch[c_id] = decoded_messages
-        return decoded_batch
-
-    def sort(
-        self,
-        key: Literal["log_time", "publish_time"] = "log_time",
-        reverse: bool = False,
-    ) -> None:
-        """Sort all messages in the batch by the specified key."""
-        for messages_tuple in self.message_dict.values():
-            messages_tuple.sort(key=key, reverse=reverse)
-
-    def extend(
-        self, other: McapMessageBatch | Sequence[McapMessagesTuple]
-    ) -> None:
-        if isinstance(other, McapMessageBatch):
-            for c_id, messages_tuple in other.message_dict.items():
-                if c_id not in self.message_dict:
-                    self.message_dict[c_id] = messages_tuple
-                else:
-                    self.message_dict[c_id].messages.extend(
-                        messages_tuple.messages
-                    )
-        else:
-            for messages_tuple in other:
-                self.append(messages_tuple)
 
 
 class MakeIterMsgArgs(Config):
@@ -249,7 +118,7 @@ class McapReader:
     - Separate the decoding logic from the reader for better flexibility.
     - Provide batch reading of messages with configurable splitting.
 
-    """  # noqa: E501
+    """
 
     def __init__(self, reader: _McapReader):
         self.reader = reader

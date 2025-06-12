@@ -24,10 +24,18 @@ from foxglove_schemas_protobuf.CompressedImage_pb2 import CompressedImage
 from google.protobuf.timestamp import from_seconds
 from google.protobuf.timestamp_pb2 import Timestamp
 
-from robo_orchard_lab.dataset.mcap.msg_converter.base import (
+from robo_orchard_lab.dataset.experimental.mcap.msg_converter.base import (
     MessageConverterConfig,
     MessageConverterStateless,
 )
+
+__all__ = [
+    "NumpyImageMsg",
+    "Numpy2CompressedImage",
+    "Numpy2CompressedImageConfig",
+    "CompressedImage2Numpy",
+    "CompressedImage2NumpyConfig",
+]
 
 
 @dataclass

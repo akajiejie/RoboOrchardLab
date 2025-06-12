@@ -13,15 +13,35 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
 # implied. See the License for the specific language governing
 # permissions and limitations under the License.
+
 from __future__ import annotations
 from abc import abstractmethod
-from typing import Any, Callable, Iterator, List, Mapping, Optional, TypeVar
+from typing import (
+    Any,
+    Callable,
+    Iterator,
+    List,
+    Literal,
+    Mapping,
+    Optional,
+    TypeVar,
+)
 
 from robo_orchard_core.datatypes.adaptor import (
     ClassInitFromConfigMixin,
     TypeAdaptorImpl,
 )
 from robo_orchard_core.utils.config import ClassConfig
+
+__all__ = [
+    "MessageConverter",
+    "MessageConverterStateless",
+    "MessageConverterStateful",
+    "MessageConverterConfig",
+    "MessageConverterFactory",
+    "MessageConverterFactoryConfig",
+    "TensorTargetConfigMixin",
+]
 
 SRC_T = TypeVar("SRC_T", bound=Any)  # the type before decoder
 DST_T = TypeVar("DST_T", bound=Any)  # The type after decoder
@@ -172,6 +192,14 @@ class MessageConverterConfig(ClassConfig[MessageConverterType_co]):
     """
 
     pass
+
+
+class TensorTargetConfigMixin(ClassConfig[SRC_T]):
+    device: str = "cpu"
+    """Device to use for target tensor, e.g., "cpu" or "cuda:0"."""
+
+    dtype: Literal["float32", "float64"] = "float32"
+    """Data type for the target tensor, e.g., "float32" or "float64"."""
 
 
 class MessageConverterFactory(ClassInitFromConfigMixin):
