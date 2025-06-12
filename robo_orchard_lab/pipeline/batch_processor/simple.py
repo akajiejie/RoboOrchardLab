@@ -35,7 +35,11 @@ from robo_orchard_lab.pipeline.hooks.mixin import (
 )
 from robo_orchard_lab.utils import as_sequence
 
-__all__ = ["SimpleBatchProcessor"]
+__all__ = [
+    "LossNotProvidedError",
+    "SimpleBatchProcessor",
+    "BatchProcessorFromCallable",
+]
 
 
 logger = logging.getLogger(__name__)
@@ -49,13 +53,7 @@ class LossNotProvidedError(Exception):
 
 
 class SimpleBatchProcessor(BatchProcessorMixin):
-    """A processor for handling batches in a training or inference pipeline.
-
-    Attributes:
-        need_backward (bool): Whether backward computation is needed.
-        transform (Compose): Transformation pipeline for batch data.
-        is_init (bool): Whether the processor has been initialized.
-    """
+    """A processor for handling batches in a training or inference pipeline."""
 
     def __init__(
         self,
@@ -209,11 +207,6 @@ class BatchProcessorFromCallable(
     be easily integrated into various training or inference pipelines.
     It provides a flexible interface for processing batches of data and
     performing model inference or training.
-
-    Attributes:
-        need_backward (bool): Whether backward computation is needed.
-        transform (Compose): Transformation pipeline for batch data.
-        is_init (bool): Whether the processor has been initialized.
     """
 
     def __init__(

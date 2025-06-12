@@ -23,6 +23,8 @@ from robo_orchard_lab.pipeline.hooks.mixin import (
     PipelineHooksConfig,
 )
 
+__all__ = ["ValidationHook", "ValidationHookConfig"]
+
 
 class ValidationHook(PipelineHooks):
     """A hook for evaluating the model during training.

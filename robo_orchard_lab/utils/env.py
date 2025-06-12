@@ -17,6 +17,8 @@
 import contextlib
 import os
 
+__all__ = ["set_env"]
+
 
 @contextlib.contextmanager
 def set_env(*remove, **update):

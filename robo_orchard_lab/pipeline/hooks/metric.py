@@ -44,7 +44,7 @@ logger = logging.getLogger(__name__)
 class MetricEntry:
     """A class representing an entry for tracking a metric."""
 
-    names: Sequence[str] | str # type: ignore
+    names: Sequence[str] | str  # type: ignore
     metric: Metric
 
     def __post_init__(self) -> None:

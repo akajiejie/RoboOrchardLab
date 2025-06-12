@@ -15,8 +15,7 @@ version.py
 docs/sg_execution_times.rst
 docs/index.rst
 docs/readme.md
-docs/api/
-!docs/api/index.rst
+docs/autoapi/
 
 ## build
 dist/

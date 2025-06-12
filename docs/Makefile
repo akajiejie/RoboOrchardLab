@@ -9,7 +9,7 @@ SPHINXPROJ    = RoboOrchardLab
 SOURCEDIR     = .
 BUILDDIR      = ../build/docs_build
 ROBO_ORCHARD_LAB_DOCS_CURRENT_VERSION_ID ?= master
-API_ROOT      = api/robo_orchard_lab
+API_ROOT      = autoapi
 
 # Put it first so that "make" without argument is like "make help".
 help:
@@ -21,7 +21,6 @@ help:
 	@mkdir -p $(BUILDDIR)
 	@rm -rf trainer_tutorial/workspace ${API_ROOT}
 	@PYTORCH_JIT=0 ROBO_ORCHARD_NO_SOURCE_FILE=1
-	sphinx-apidoc -o ${API_ROOT} -q -f --separate --tocfile index ../robo_orchard_lab
 	$(SPHINXBUILD) -M $@ "$(SOURCEDIR)" "$(BUILDDIR)" $(SPHINXOPTS) $(O)
 	@cp -rf $(BUILDDIR)/html $(BUILDDIR)/$(ROBO_ORCHARD_LAB_DOCS_CURRENT_VERSION_ID)
 

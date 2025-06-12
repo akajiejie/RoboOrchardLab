@@ -42,11 +42,10 @@ from robo_orchard_core.utils.string import add_indentation
 from typing_extensions import Self, TypeVar
 
 __all__ = [
+    "HookContext",
     "PipelineHooks",
     "PipelineHookArgs",
     "PipelineHookChanelType",
-    "HookContext",
-    "HookContextChannel",
     "PipelineHooksConfig",
 ]
 

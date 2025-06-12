@@ -23,7 +23,7 @@ from mcap.records import (
     Schema,
 )
 
-__all__ = ["McapDecoderContext", "McapDecoderFactory"]
+__all__ = ["McapDecoderContext"]
 
 
 class McapDecoderContext:

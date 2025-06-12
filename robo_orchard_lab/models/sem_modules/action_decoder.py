@@ -28,7 +28,7 @@ from robo_orchard_lab.utils import as_sequence, build
 class SEMActionDecoder(nn.Module):
     """Spatial Enhanced Manipulation (SEM) Action Decoder.
 
-    Decoder implementation from the paper 'https://arxiv.org/abs/2505.16196'.
+    Decoder implementation from the paper https://arxiv.org/abs/2505.16196
     """
 
     def __init__(

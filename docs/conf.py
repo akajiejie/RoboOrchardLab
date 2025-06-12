@@ -62,6 +62,7 @@ needs_sphinx = "6.0"
 # ones.
 extensions = [
     "sphinx.ext.autodoc",
+    "autoapi.extension",
     "sphinx.ext.doctest",
     "sphinx.ext.autosummary",
     "sphinx.ext.intersphinx",
@@ -112,6 +113,21 @@ autosummary_generate_overwrite = True
 autodoc_default_options = {
     "autosummary": True,
 }
+
+autoapi_dirs = ["../robo_orchard_lab"]
+autoapi_root = "autoapi"
+autoapi_keep_files = True
+autoapi_type = "python"
+autoapi_template_dir = "_templates/autoapi"
+autoapi_ignore = ["*migrations*", "*/setup.py"]
+autoapi_options = [
+    "members",
+    "inherited-members",
+    "undoc-members",
+    "show-inheritance",
+    "show-module-summary",
+    "imported-members",
+]
 
 if with_comment:
     extensions.append("sphinx_comments")
@@ -178,7 +194,6 @@ sphinx_gallery_conf = {
 exclude_patterns = [
     "**/nonb**.ipynb",
     "trainer_tutorial/GALLERY_HEADER.rst",
-    "api/robo_orchard_lab/index.rst"
 ]
 
 
@@ -187,6 +202,8 @@ suppress_warnings = [
     # To suppress warnings that gallery ipynb files are not included in the TOC
     # This is caused by conflicting sphinx-gallery and nbsphinx extensions
     "toc.not_included",
+    # Emitted if resolving references to objects in an imported module failed.
+    "autoapi.python_import_resolution",
 ]
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ["_templates"]
@@ -401,12 +418,22 @@ def patch_autodoc(app):
     app.connect("autodoc-process-bases", process_base)
 
 
+def autoapi_skip_member(app):
+    def _impl(app, what, name, obj, skip, options):
+        if "robo_orchard_lab.ops.deformable_aggregation.setup" in name:
+            skip = True
+        return skip
+
+    app.connect("autoapi-skip-member", _impl)
+
+
 def setup(app):
     app.add_js_file("google_analytics.js")
     app.add_css_file("css/custom.css")
     app.add_transform(AutoStructify)
     app.add_config_value("recommonmark_config", {}, True)
     patch_autodoc(app)
+    autoapi_skip_member(app)
     gen_index(
         jinja_template_path="index.jinja", gallery_dirs_dict=build_gallery_dict
     )

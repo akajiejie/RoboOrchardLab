@@ -16,6 +16,8 @@
 
 import os
 
+__all__ = ["DirectoryNotEmptyError", "is_empty_directory"]
+
 
 class DirectoryNotEmptyError(Exception):
     """Exception raised when a directory is not empty as expected."""

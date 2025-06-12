@@ -22,6 +22,8 @@ from robo_orchard_lab.pipeline.hooks.mixin import (
     PipelineHooksConfig,
 )
 
+__all__ = ["OptimizerHook", "OptimizerHookConfig"]
+
 
 class OptimizerHook(PipelineHooks):
     """A hook for optimizing the model during training.

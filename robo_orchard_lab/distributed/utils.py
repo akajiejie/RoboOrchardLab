@@ -17,6 +17,8 @@
 import torch.distributed as dist
 from robo_orchard_core.utils.distributed import *
 
+__all__ = ["reduce_mean"]
+
 
 def reduce_mean(tensor):
     """Obtain the mean of tensor on different GPUs."""

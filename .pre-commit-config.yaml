@@ -28,14 +28,25 @@ repos:
 
   - repo: local
     hooks:
-      - id: ruff-python
-        name: ruff-change-exclude-docs
-        description: Check python doc style.
-        entry: ruff check
-        language: system
+      - id: ruff-format
+        name: ruff format
+        description: ruff format
+        entry: ruff format
+        language: python
         files: \.(py)$
         types: [file, python]
-        args: [--config=pyproject.toml]
+        args: [--config=pyproject.toml, --force-exclude]
+
+  - repo: local
+    hooks:
+      - id: ruff-check
+        name: ruff check
+        description: ruff check
+        entry: ruff check
+        language: python
+        files: \.(py)$
+        types: [file, python]
+        args: [--config=pyproject.toml, --force-exclude, --fix]
 
   - repo: local
     hooks:

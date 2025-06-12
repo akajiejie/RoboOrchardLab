@@ -35,6 +35,9 @@ except ImportError:
     dad = None
 
 
+__all__ = ["deformable_aggregation_func", "feature_maps_format"]
+
+
 def load_deformable_aggregation(with_depth=False) -> types.ModuleType:
     from pathlib import Path
 

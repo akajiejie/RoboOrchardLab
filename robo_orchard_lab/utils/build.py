@@ -22,6 +22,8 @@ import torch
 from pydantic.functional_validators import PlainValidator
 from robo_orchard_core.utils.config import ClassConfig, callable_to_string
 
+__all__ = ["build", "DelayInitDictType"]
+
 
 def build(obj: ClassConfig | dict | Any, *args) -> Any:
     """Instantiates an object based on the provided configuration or object.

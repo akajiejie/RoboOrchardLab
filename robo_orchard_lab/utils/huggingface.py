@@ -23,7 +23,11 @@ from typing import Any
 import fsspec
 from accelerate import Accelerator
 
-__all__ = ["get_accelerate_project_last_checkpoint_id"]
+__all__ = [
+    "get_accelerate_project_last_checkpoint_id",
+    "accelerator_load_state",
+    "AcceleratorState",
+]
 
 
 def get_accelerate_project_last_checkpoint_id(project_dir: str) -> int:
