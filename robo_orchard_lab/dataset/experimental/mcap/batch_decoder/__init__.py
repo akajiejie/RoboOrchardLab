@@ -17,4 +17,5 @@
 from .base import *
 from .camera import *
 from .joint_state import *
+from .pose import *
 from .tf import *

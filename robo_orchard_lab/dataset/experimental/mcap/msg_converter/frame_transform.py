@@ -98,8 +98,8 @@ class ToBatchFrameTransformStamped(
             return BatchFrameTransformStamped(
                 child_frame_id=src.child_frame_id,
                 parent_frame_id=src.parent_frame_id,
-                xyz=tf_trans,
-                quat=tf_rot,
+                xyz=tf_trans.to(device=self._cfg.device),
+                quat=tf_rot.to(device=self._cfg.device),
                 timestamps=[src.timestamp],
             )
         else:

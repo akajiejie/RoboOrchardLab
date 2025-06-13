@@ -49,6 +49,19 @@ def is_list_of_protobuf_msg_type(
     msg_type: Type[T],
     only_check_first: bool = True,
 ) -> TypeGuard[list[T]]:
+    """Check if the data is of a list of specific protobuf message type.
+
+    MCap protobuf message use schema from mcap file. This result in the class
+    type of the protobuf message being different from the one defined in the
+    python package. For processing the protobuf message in more convenient
+    way, we can use this function as type guard to treat the data as the
+    specific protobuf message type.
+
+    Warning:
+        This function only checks the full name of the protobuf message
+        descriptor. So it is not a strict type check. Use with caution.
+    """
+
     if not isinstance(data, list):
         return False
     if len(data) == 0:

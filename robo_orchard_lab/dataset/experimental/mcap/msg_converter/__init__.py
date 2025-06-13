@@ -18,3 +18,4 @@ from .base import *
 from .batch_camera import *
 from .compressed_img import *
 from .frame_transform import *
+from .pose import *

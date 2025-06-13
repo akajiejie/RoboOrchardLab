@@ -23,6 +23,7 @@ from robo_orchard_lab.dataset.experimental.mcap.batch_decoder import (
     McapBatch2BatchCameraDataConfig,
     McapBatch2BatchFrameTransformConfig,
     McapBatch2BatchJointStateConfig,
+    McapBatch2BatchPoseConfig,
     McapBatchDecoderConfig,
     McapBatchDecoders,
 )
@@ -118,6 +119,9 @@ class TestBatch2DataDict:
                     image_topic="/observation/cameras/wrist/left/image",
                     tf_topic="/observation/cameras/wrist/left/tf",
                     calib_topic="/observation/cameras/wrist/left/camera_calib",
+                ),
+                "ee_pose": McapBatch2BatchPoseConfig(
+                    source_topic="/action/robot_state/ee_pose"
                 ),
             }
         ],
