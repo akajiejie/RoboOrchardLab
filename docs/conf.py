@@ -134,6 +134,7 @@ if with_comment:
 
 gallery_dict = OrderedDict()
 gallery_dict["trainer_tutorial"] = [{"path": "trainer_tutorial/"}]
+gallery_dict["model_api_tutorial"] = [{"path": "model_api_tutorial/"}]
 
 build_gallery_dict = OrderedDict()
 examples_dirs = []
@@ -194,6 +195,7 @@ sphinx_gallery_conf = {
 exclude_patterns = [
     "**/nonb**.ipynb",
     "trainer_tutorial/GALLERY_HEADER.rst",
+    "model_api_tutorial/GALLERY_HEADER.rst",
 ]
 
 
