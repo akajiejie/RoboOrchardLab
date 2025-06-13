@@ -114,12 +114,18 @@ autodoc_default_options = {
     "autosummary": True,
 }
 
+# autoapi configuration
 autoapi_dirs = ["../robo_orchard_lab"]
 autoapi_root = "autoapi"
 autoapi_keep_files = True
 autoapi_type = "python"
 autoapi_template_dir = "_templates/autoapi"
-autoapi_ignore = ["*migrations*", "*/setup.py"]
+autoapi_ignore = [
+    "*migrations*",
+    "*/setup.py",
+    "*robo_orchard_lab/dataset/experimental",
+]
+autoapi_python_use_implicit_namespaces = True
 autoapi_options = [
     "members",
     "inherited-members",
@@ -128,6 +134,18 @@ autoapi_options = [
     "show-module-summary",
     "imported-members",
 ]
+
+
+def autoapi_skip_member(app):
+    def _impl(app, what, name, obj, skip, options):
+        if "robo_orchard_lab.ops.deformable_aggregation.setup" in name:
+            skip = True
+        elif "robo_orchard_lab.dataset.experimental" in name:
+            skip = True
+        return skip
+
+    app.connect("autoapi-skip-member", _impl)
+
 
 if with_comment:
     extensions.append("sphinx_comments")
@@ -418,15 +436,6 @@ def patch_autodoc(app):
 
     app.connect("autodoc-skip-member", skip_dup_process())
     app.connect("autodoc-process-bases", process_base)
-
-
-def autoapi_skip_member(app):
-    def _impl(app, what, name, obj, skip, options):
-        if "robo_orchard_lab.ops.deformable_aggregation.setup" in name:
-            skip = True
-        return skip
-
-    app.connect("autoapi-skip-member", _impl)
 
 
 def setup(app):
