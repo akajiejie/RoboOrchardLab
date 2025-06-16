@@ -19,7 +19,7 @@ import os
 from typing import Callable, List, Optional, Union
 
 import numpy as np
-from pydantic import BaseModel, ConfigDict
+from pydantic import AliasChoices, BaseModel, ConfigDict, Field
 from torch.utils.data import Dataset
 
 from robo_orchard_lab.dataset.lmdb.lmdb_wrapper import Lmdb
@@ -32,7 +32,7 @@ class BaseIndexData(BaseModel):
     """Base data structure for indexing simulation or task-related information."""  # noqa: E501
 
     uuid: str
-    task_name: str
+    task_name: str = Field(validation_alias=AliasChoices("task_name", "task"))
     num_steps: int
     user: Optional[str] = None
     embodiment: Optional[str] = None

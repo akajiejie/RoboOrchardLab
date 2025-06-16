@@ -45,7 +45,7 @@ mcap_datasets = [
     "foxglove-schemas-protobuf>=0.3.0",
     "opencv-python",
     "datasets>=3.2.0",
-    "robo_orchard_schemas@git+https://github.com/HorizonRobotics/robo_orchard_schemas.git@5e213f713f29398d2c631afc8e2d42bf1474b2c8",
+    "robo_orchard_schemas@git+https://github.com/HorizonRobotics/robo_orchard_schemas.git@4a2920a718a8395aeb3b5e8e16c5c924ff6e0f07",
 ]
 all = ["robo_orchard_lab[bip3d,sem,mcap_datasets]"]
 
