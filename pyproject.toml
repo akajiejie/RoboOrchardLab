@@ -14,6 +14,7 @@ dependencies = [
     "deprecated",
     "timeout-decorator",
     "requests",
+    "huggingface_hub",
     # metric
     "torchmetrics>=1.6",
     # robo orchard

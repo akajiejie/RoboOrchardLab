@@ -144,12 +144,29 @@ class ModelMixin(torch.nn.Module, ClassInitFromConfigMixin):
         device: str = "cpu",
         model_prefix: str = "model",
     ) -> "ModelMixin":
-        """Loads a model from a specified directory.
+        """Loads a model from a local directory or the Hugging Face Hub.
+
+        This method supports loading from a local path or a Hugging Face Hub
+        repository. For Hub models, a URI format is used:
+        `hf://[<token>@]<repo_id>`
+
+        .. code-block:: text
+
+            Public model: `hf://google/gemma-7b`
+
+            Private model: `hf://hf_YourToken@username/private-repo`
+
+        .. warning::
+
+            Embedding tokens directly in the URL can be a security risk.
+            The URL may be logged in shell history or server logs. It is often safer
+            to rely on the environment variable **HF_TOKEN** or the
+            local token cache from `huggingface-cli login`.
 
         This method first loads the model's configuration from a JSON file
         (e.g., "model.config.json") found in the given directory. It then
         instantiates the model using this configuration. The instantiation
-        occurs within a context where the `ORCHARD_LAB_CHECKPOINT_DIRECTORY`
+        occurs within a context where the **ORCHARD_LAB_CHECKPOINT_DIRECTORY**
         environment variable is temporarily set to the `directory` path.
 
         If `load_model` is True, the method proceeds to load the model's
@@ -183,6 +200,33 @@ class ModelMixin(torch.nn.Module, ClassInitFromConfigMixin):
                 or the state dictionary file (`{model_prefix}.safetensors}`,
                 when `load_model` is True) is not found in the directory.
         """  # noqa: E501
+
+        if directory.startswith("hf://"):
+            from urllib.parse import urlparse
+
+            from huggingface_hub import snapshot_download
+
+            parsed_url = urlparse(directory)
+            token_from_url = parsed_url.username
+
+            repo_id = parsed_url.hostname
+
+            if not repo_id:
+                raise ValueError(f"Invalid Hugging Face Hub URI: {directory}")
+
+            if parsed_url.path:
+                repo_id += parsed_url.path
+
+            with set_env(HF_HUB_DISABLE_PROGRESS_BARS="1"):
+                directory = snapshot_download(
+                    repo_id=repo_id,
+                    # Pass the token extracted from the URL.
+                    # If no token was in the URL, this will be None, and
+                    # huggingface_hub will fall back to env variables/cache.
+                    token=token_from_url,
+                    repo_type="model",
+                )
+
         if not os.path.exists(directory):
             raise FileNotFoundError(f"checkpoint {directory} does not exists!")
 
