@@ -19,13 +19,18 @@ import importlib
 import json
 import logging
 import os
+from datetime import timedelta
 from multiprocessing import set_start_method
 
 import requests
 import torch
 from accelerate import Accelerator
 from accelerate.state import AcceleratorState, is_initialized
-from accelerate.utils import DataLoaderConfiguration, ProjectConfiguration
+from accelerate.utils import (
+    DataLoaderConfiguration,
+    InitProcessGroupKwargs,
+    ProjectConfiguration,
+)
 from safetensors.torch import load_model
 
 from robo_orchard_lab.dataset.collates import collate_batch_dict
@@ -213,7 +218,7 @@ if __name__ == "__main__":
 
     workspace_root = args.workspace
     accelerator = Accelerator(
-        step_scheduler_with_optimizer=True,
+        step_scheduler_with_optimizer=False,
         project_config=ProjectConfiguration(
             project_dir=workspace_root,
             logging_dir=os.path.join(workspace_root, "logs"),
@@ -223,6 +228,9 @@ if __name__ == "__main__":
         dataloader_config=DataLoaderConfiguration(
             use_seedable_sampler=True,
         ),
+        kwargs_handlers=[
+            InitProcessGroupKwargs(timeout=timedelta(seconds=7200))
+        ],
     )
     log_basic_config(
         format="%rank %(asctime)s %(levelname)s %(filename)s:%(lineno)d | %(message)s",  # noqa: E501

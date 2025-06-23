@@ -12,8 +12,11 @@
   <a href="https://linxuewu.github.io/BIP3D-page/" target="_blank" style="margin: 2px;">
     <img alt="Homepage" src="https://img.shields.io/badge/Homepage-BIP3D-green" style="display: inline-block; vertical-align: middle;"/>
   </a>
-  <a href="https://arxiv.org/abs/2411.14869" target="_blank" style="margin: 2px;">
-    <img alt="Paper" src="https://img.shields.io/badge/Paper-Arxiv-red" style="display: inline-block; vertical-align: middle;"/>
+  <a href="https://openaccess.thecvf.com/content/CVPR2025/html/Lin_BIP3D_Bridging_2D_Images_and_3D_Perception_for_Embodied_Intelligence_CVPR_2025_paper.html" target="_blank" style="margin: 2px;">
+    <img alt="Paper" src="https://img.shields.io/badge/Paper-CVPR2025-red" style="display: inline-block; vertical-align: middle;"/>
+  </a>
+  <a href="https://huggingface.co/HorizonRobotics/BIP3D_Tiny_Det" target="_blank" style="margin: 2px;">
+    <img alt="Model" src="https://img.shields.io/badge/Model-HuggingFace-red" style="display: inline-block; vertical-align: middle;"/>
   </a>
 </div>
 

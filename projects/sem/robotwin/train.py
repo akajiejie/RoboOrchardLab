@@ -131,7 +131,7 @@ if __name__ == "__main__":
 
     workspace_root = args.workspace
     accelerator = Accelerator(
-        step_scheduler_with_optimizer=True,
+        step_scheduler_with_optimizer=False,
         project_config=ProjectConfiguration(
             project_dir=workspace_root,
             logging_dir=os.path.join(workspace_root, "logs"),

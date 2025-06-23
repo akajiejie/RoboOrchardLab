@@ -14,6 +14,9 @@
   <a href="https://arxiv.org/abs/2505.16196" target="_blank" style="margin: 2px;">
     <img alt="Paper" src="https://img.shields.io/badge/Paper-Arxiv-red" style="display: inline-block; vertical-align: middle;"/>
   </a>
+  <a href="https://huggingface.co/HorizonRobotics/SEM-RoboTwin-Tiny" target="_blank" style="margin: 2px;">
+    <img alt="Model" src="https://img.shields.io/badge/Model-HuggingFace-red" style="display: inline-block; vertical-align: middle;"/>
+  </a>
 </div>
 
 

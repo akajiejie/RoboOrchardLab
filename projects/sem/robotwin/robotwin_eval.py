@@ -21,8 +21,7 @@ import os
 import sys
 
 import yaml
-from safetensors.torch import load_model
-from utils import load_config  # type: ignore
+from utils import load_checkpoint, load_config  # type: ignore
 
 from robo_orchard_lab.dataset.robotwin.close_loop_eval import (
     class_decorator,
@@ -47,7 +46,7 @@ def main(args):
     checkpoint = args.checkpoint
     if checkpoint is None:
         checkpoint = config.get("checkpoint")
-    load_model(model, checkpoint)
+    load_checkpoint(model, checkpoint)
     model.eval()
     model.requires_grad_()
     model.cuda()
