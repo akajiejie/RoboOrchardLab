@@ -18,6 +18,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Literal, TypeVar
 
+import cv2
+import numpy as np
 import torch
 from foxglove_schemas_protobuf.CameraCalibration_pb2 import (
     CameraCalibration as FgCameraCalibration,
@@ -28,27 +30,27 @@ from foxglove_schemas_protobuf.CompressedImage_pb2 import (
 from foxglove_schemas_protobuf.FrameTransform_pb2 import (
     FrameTransform as FgFrameTransform,
 )
-from google.protobuf.timestamp_pb2 import Timestamp
-from pydantic import SkipValidation
-from robo_orchard_core.datatypes.camera_data import BatchCameraData, Distortion
+from robo_orchard_core.datatypes.camera_data import (
+    BatchCameraData,
+    BatchCameraDataEncoded,
+    Distortion,
+)
 
 from robo_orchard_lab.dataset.experimental.mcap.msg_converter.base import (
     ClassConfig,
     MessageConverterConfig,
     MessageConverterStateless,
 )
-from robo_orchard_lab.dataset.experimental.mcap.msg_converter.compressed_img import (  # noqa: E501
-    CompressedImage2NumpyConfig,
-)
 from robo_orchard_lab.dataset.experimental.mcap.msg_converter.frame_transform import (  # noqa: E501
-    ToBatchFrameTransformStampedConfig,
+    ToBatchFrameTransformConfig,
 )
 
 __all__ = [
     "FgCameraCompressedImages",
-    "BatchCameraDataWithTimestamps",
     "ToBatchCameraData",
+    "ToBatchCameraDataEncoded",
     "ToBatchCameraDataConfig",
+    "ToBatchCameraDataEncodedConfig",
     "CameraDataConfigMixin",
 ]
 
@@ -81,62 +83,43 @@ class FgCameraCompressedImages:
                     )
 
 
-class BatchCameraDataWithTimestamps(BatchCameraData):
-    """BatchCameraData with an associated timestamp."""
-
-    timestamps: list[SkipValidation[Timestamp] | None] | None = None
-    """Timestamp for the batch of camera data."""
-
-
-class ToBatchCameraData(
-    MessageConverterStateless[
-        FgCameraCompressedImages, BatchCameraDataWithTimestamps
-    ]
+class ToBatchCameraDataEncoded(
+    MessageConverterStateless[FgCameraCompressedImages, BatchCameraDataEncoded]
 ):
-    """Convert FgCameraCompressedImages to BatchCameraDataWithTimestamps."""
-
-    def __init__(self, cfg: ToBatchCameraDataConfig | None = None):
+    def __init__(self, cfg: ToBatchCameraDataEncodedConfig | None = None):
         """Initialize the converter."""
         if cfg is None:
-            cfg = ToBatchCameraDataConfig()
-
-        if cfg.pix_fmt is None:
-            cfg.pix_fmt = "bgr"
+            cfg = ToBatchCameraDataEncodedConfig()
 
         self._cfg = cfg
-        self._to_numpy = CompressedImage2NumpyConfig()()
-        self._to_tf = ToBatchFrameTransformStampedConfig()()
+        self._to_tf = ToBatchFrameTransformConfig()()
 
-    def convert(
-        self, src: FgCameraCompressedImages
-    ) -> BatchCameraDataWithTimestamps:
-        np_imgs = [self._to_numpy.convert(img) for img in src.images]
-        timestamps = []
-        for img in np_imgs:
-            if img.frame_id != np_imgs[0].frame_id:
+    def convert(self, src: FgCameraCompressedImages) -> BatchCameraDataEncoded:
+        # img_byte_list = [img.data for img in src.images]
+        timestamps: list[int] | None = []
+        for img in src.images:
+            if img.frame_id != src.images[0].frame_id:
                 raise ValueError(
                     "All images must have the same frame_id, "
-                    f"but got {img.frame_id} and {np_imgs[0].frame_id}."
+                    f"but got {img.frame_id} and {src.images[0].frame_id}."
                 )
-            timestamps.append(img.timestamp)
+            if img.format != src.images[0].format:
+                raise ValueError(
+                    "All images must have the same format, "
+                    f"but got {img.format} and {src.images[0].format}."
+                )
+            timestamps.append(img.timestamp.ToNanoseconds())
 
         if all(timestamp is None for timestamp in timestamps):
             timestamps = None
 
-        batch_img_tensor = torch.stack(
-            [torch.from_numpy(img.data) for img in np_imgs]
-        )
-        ret = BatchCameraDataWithTimestamps(
-            sensor_data=batch_img_tensor,
-            frame_id=np_imgs[0].frame_id,
-            pix_fmt=self._cfg.pix_fmt,
-            image_shape=(batch_img_tensor.shape[1], batch_img_tensor.shape[2]),
+        ret = BatchCameraDataEncoded(
+            sensor_data=[img.data for img in src.images],
+            frame_id=src.images[0].frame_id,
+            format=src.images[0].format,  # type: ignore
+            image_shape=None,
             timestamps=timestamps,
         )
-        if self._cfg.pix_fmt == "rgb":
-            # Convert BGR to RGB if needed
-            ret.sensor_data = ret.sensor_data[..., ::-1]
-
         self._set_camera_calib(calib=src.calib, target=ret)
         self._set_tf(tf=src.tf, target=ret, timestamps=timestamps)
         return ret
@@ -144,8 +127,8 @@ class ToBatchCameraData(
     def _set_tf(
         self,
         tf: FgFrameTransform | list[FgFrameTransform] | None,
-        timestamps: list[Timestamp | None] | None,
-        target: BatchCameraData,
+        timestamps: list[int] | None,
+        target: BatchCameraData | BatchCameraDataEncoded,
     ):
         """Set the frame transform."""
         if tf is None:
@@ -159,7 +142,9 @@ class ToBatchCameraData(
             )
 
     def _set_camera_calib(
-        self, calib: FgCameraCalibration | None, target: BatchCameraData
+        self,
+        calib: FgCameraCalibration | None,
+        target: BatchCameraData | BatchCameraDataEncoded,
     ) -> None:
         """Set the camera calibration."""
         if calib is None:
@@ -190,7 +175,50 @@ class ToBatchCameraData(
         )
 
 
+class ToBatchCameraData(
+    MessageConverterStateless[FgCameraCompressedImages, BatchCameraData]
+):
+    """Convert FgCameraCompressedImages to BatchCameraDataStamped."""
+
+    def __init__(self, cfg: ToBatchCameraDataConfig | None = None):
+        """Initialize the converter."""
+        if cfg is None:
+            cfg = ToBatchCameraDataConfig()
+        if cfg.pix_fmt is None:
+            cfg.pix_fmt = "bgr"
+
+        self._cfg = cfg
+        self._to_encoded = ToBatchCameraDataEncodedConfig()()
+
+        def decode(data: bytes, format: str) -> torch.Tensor:
+            """Decode the image data."""
+            return torch.from_numpy(
+                cv2.imdecode(
+                    np.frombuffer(data, np.uint8), cv2.IMREAD_UNCHANGED
+                )
+            )
+
+        self._decoder = decode
+
+    def convert(self, src: FgCameraCompressedImages) -> BatchCameraData:
+        ret = self._to_encoded.convert(src).decode(
+            self._decoder, pix_fmt=self._cfg.pix_fmt
+        )
+        if self._cfg.pix_fmt == "rgb":
+            # Convert BGR to RGB if needed
+            ret.sensor_data = ret.sensor_data[..., ::-1]
+        return ret
+
+
 T = TypeVar("T")
+
+
+class ToBatchCameraDataEncodedConfig(
+    MessageConverterConfig[ToBatchCameraDataEncoded],
+):
+    """Configuration class for CameraMsgs2BatchCameraData."""
+
+    class_type: type[ToBatchCameraDataEncoded] = ToBatchCameraDataEncoded
 
 
 class CameraDataConfigMixin(ClassConfig[T]):

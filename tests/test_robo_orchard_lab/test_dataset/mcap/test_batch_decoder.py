@@ -21,6 +21,7 @@ import pytest
 
 from robo_orchard_lab.dataset.experimental.mcap.batch_decoder import (
     McapBatch2BatchCameraDataConfig,
+    McapBatch2BatchCameraDataEncodedConfig,
     McapBatch2BatchFrameTransformConfig,
     McapBatch2BatchJointStateConfig,
     McapBatch2BatchPoseConfig,
@@ -120,6 +121,11 @@ class TestBatch2DataDict:
                     tf_topic="/observation/cameras/wrist/left/tf",
                     calib_topic="/observation/cameras/wrist/left/camera_calib",
                 ),
+                "camera_encoded": McapBatch2BatchCameraDataEncodedConfig(
+                    image_topic="/observation/cameras/wrist/left/image",
+                    tf_topic="/observation/cameras/wrist/left/tf",
+                    calib_topic="/observation/cameras/wrist/left/camera_calib",
+                ),
                 "ee_pose": McapBatch2BatchPoseConfig(
                     source_topic="/action/robot_state/ee_pose"
                 ),
@@ -137,8 +143,7 @@ class TestBatch2DataDict:
         ret = to_data(example_msg_batch, msg_decoder_ctx=msg_decoder_ctx)
         for k in configs.keys():
             assert k in ret, f"Key {k} not found in the result"
-
-        print(ret)
+            print(f"{k}: {type(ret[k])}")
 
 
 class TestBatch2JointState:

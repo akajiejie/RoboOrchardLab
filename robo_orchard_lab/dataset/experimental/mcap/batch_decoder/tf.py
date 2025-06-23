@@ -21,9 +21,9 @@ from robo_orchard_lab.dataset.experimental.mcap.batch_decoder.base import (
     McapBatchDecoderConfig,
 )
 from robo_orchard_lab.dataset.experimental.mcap.msg_converter import (  # noqa: E501
-    BatchFrameTransformStamped,
+    BatchFrameTransform,
     TensorTargetConfigMixin,
-    ToBatchFrameTransformStampedConfig,
+    ToBatchFrameTransformConfig,
 )
 
 __all__ = [
@@ -32,13 +32,11 @@ __all__ = [
 ]
 
 
-class McapBatch2BatchFrameTransform(
-    McapBatchDecoder[BatchFrameTransformStamped]
-):
+class McapBatch2BatchFrameTransform(McapBatchDecoder[BatchFrameTransform]):
     def __init__(self, config: McapBatch2BatchFrameTransformConfig):
         super().__init__()
         self._cfg = config
-        self._msg_cvt = ToBatchFrameTransformStampedConfig(
+        self._msg_cvt = ToBatchFrameTransformConfig(
             device=config.device, dtype=config.dtype
         )()
         self._required_topics = set([config.source_topic])
@@ -48,7 +46,7 @@ class McapBatch2BatchFrameTransform(
 
     def format_batch(
         self, decoded_msgs: dict[str, list]
-    ) -> BatchFrameTransformStamped:
+    ) -> BatchFrameTransform:
         return self._msg_cvt.convert(decoded_msgs[self._cfg.source_topic])
 
 

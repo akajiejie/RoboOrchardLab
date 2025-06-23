@@ -21,7 +21,7 @@ from robo_orchard_lab.dataset.experimental.mcap.batch_decoder.base import (
     McapBatchDecoderConfig,
 )
 from robo_orchard_lab.dataset.experimental.mcap.msg_converter.joint_state import (  # noqa: E501
-    BatchJointsStateStamped,
+    BatchJointsState,
     TensorTargetConfigMixin,
     ToBatchJointsStateConfig,
 )
@@ -32,7 +32,7 @@ __all__ = [
 ]
 
 
-class McapBatch2BatchJointState(McapBatchDecoder[BatchJointsStateStamped]):
+class McapBatch2BatchJointState(McapBatchDecoder[BatchJointsState]):
     def __init__(self, config: McapBatch2BatchJointStateConfig):
         super().__init__()
         self._cfg = config
@@ -43,9 +43,7 @@ class McapBatch2BatchJointState(McapBatchDecoder[BatchJointsStateStamped]):
     def require_topics(self) -> set[str]:
         return set([self._cfg.source_topic])
 
-    def format_batch(
-        self, decoded_msgs: dict[str, list]
-    ) -> BatchJointsStateStamped:
+    def format_batch(self, decoded_msgs: dict[str, list]) -> BatchJointsState:
         return self._msg_cvt.convert(decoded_msgs[self._cfg.source_topic])
 
 

@@ -20,8 +20,6 @@ import torch
 from foxglove_schemas_protobuf.FrameTransform_pb2 import (
     FrameTransform as FgFrameTransform,
 )
-from google.protobuf.timestamp_pb2 import Timestamp
-from pydantic import SkipValidation
 from robo_orchard_core.datatypes.camera_data import BatchFrameTransform
 from robo_orchard_core.utils.torch_utils import dtype_str2torch
 
@@ -32,52 +30,30 @@ from robo_orchard_lab.dataset.experimental.mcap.msg_converter.base import (
 )
 
 __all__ = [
-    "BatchFrameTransformStamped",
-    "ToBatchFrameTransformStamped",
-    "ToBatchFrameTransformStampedConfig",
+    "BatchFrameTransform",
+    "ToBatchFrameTransform",
+    "ToBatchFrameTransformConfig",
 ]
 
 
-class BatchFrameTransformStamped(BatchFrameTransform):
-    timestamps: list[SkipValidation[Timestamp] | None] | None = None
-    """Timestamp for the frame transform"""
-
-    def repeat(
-        self, batch_size: int, timestamps: list[Timestamp | None] | None
-    ) -> BatchFrameTransform:
-        if timestamps is not None:
-            assert len(timestamps) == batch_size, (
-                f"Batch size {batch_size} does not match number of "
-                f"timestamps {len(timestamps)}."
-            )
-        ret = super().repeat(batch_size)
-        return BatchFrameTransformStamped(
-            child_frame_id=ret.child_frame_id,
-            parent_frame_id=ret.parent_frame_id,
-            xyz=ret.xyz,
-            quat=ret.quat,
-            timestamps=timestamps,
-        )
-
-
-class ToBatchFrameTransformStamped(
+class ToBatchFrameTransform(
     MessageConverterStateless[
         FgFrameTransform | list[FgFrameTransform],
-        BatchFrameTransformStamped,
+        BatchFrameTransform,
     ]
 ):
     """Convert a Foxglove FrameTransform message to a FrameTransform Type."""
 
     def __init__(
         self,
-        cfg: ToBatchFrameTransformStampedConfig,
+        cfg: ToBatchFrameTransformConfig,
     ):
         self._cfg = cfg
         self._dtype = dtype_str2torch(cfg.dtype)
 
     def convert(
         self, src: FgFrameTransform | list[FgFrameTransform]
-    ) -> BatchFrameTransformStamped:
+    ) -> BatchFrameTransform:
         if not isinstance(src, list):
             tf_trans = torch.tensor(
                 [src.translation.x, src.translation.y, src.translation.z],
@@ -95,12 +71,12 @@ class ToBatchFrameTransformStamped(
                 device=self._cfg.device,
             )
 
-            return BatchFrameTransformStamped(
+            return BatchFrameTransform(
                 child_frame_id=src.child_frame_id,
                 parent_frame_id=src.parent_frame_id,
                 xyz=tf_trans.to(device=self._cfg.device),
                 quat=tf_rot.to(device=self._cfg.device),
-                timestamps=[src.timestamp],
+                timestamps=[src.timestamp.ToNanoseconds()],
             )
         else:
             assert len(src) > 0, "List of FrameTransform cannot be empty."
@@ -126,19 +102,17 @@ class ToBatchFrameTransformStamped(
                     ],
                     dtype=self._dtype,
                 )
-            return BatchFrameTransformStamped(
+            return BatchFrameTransform(
                 child_frame_id=src[0].child_frame_id,
                 parent_frame_id=src[0].parent_frame_id,
                 xyz=tf_trans.to(device=self._cfg.device),
                 quat=tf_rot.to(device=self._cfg.device),
-                timestamps=[tf.timestamp for tf in src],
+                timestamps=[tf.timestamp.ToNanoseconds() for tf in src],
             )
 
 
-class ToBatchFrameTransformStampedConfig(
-    MessageConverterConfig[ToBatchFrameTransformStamped],
-    TensorTargetConfigMixin[ToBatchFrameTransformStamped],
+class ToBatchFrameTransformConfig(
+    MessageConverterConfig[ToBatchFrameTransform],
+    TensorTargetConfigMixin[ToBatchFrameTransform],
 ):
-    class_type: type[ToBatchFrameTransformStamped] = (
-        ToBatchFrameTransformStamped
-    )
+    class_type: type[ToBatchFrameTransform] = ToBatchFrameTransform

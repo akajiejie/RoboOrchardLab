@@ -17,8 +17,6 @@
 from __future__ import annotations
 
 import torch
-from google.protobuf.timestamp_pb2 import Timestamp
-from pydantic import SkipValidation
 from robo_orchard_core.datatypes.joint_state import BatchJointsState
 from robo_orchard_core.utils.torch_utils import dtype_str2torch
 from robo_orchard_schemas.sensor_msgs.JointState_pb2 import (
@@ -34,19 +32,10 @@ from robo_orchard_lab.dataset.experimental.mcap.msg_converter.base import (
 )
 from robo_orchard_lab.utils.protobuf import is_list_of_protobuf_msg_type
 
-
-class BatchJointsStateStamped(BatchJointsState):
-    timestamps: list[SkipValidation[Timestamp] | None] | None = None
-    """Timestamp for the joint states"""
-
-    def __post_init__(self):
-        super().__post_init__()
-        if self.timestamps is not None:
-            assert len(self.timestamps) == self.batch_size, (
-                f"Batch size {self.batch_size} does not match number of "
-                f"timestamps {len(self.timestamps)}."
-            )
-
+___all__ = [
+    "ToBatchJointsState",
+    "ToBatchJointsStateConfig",
+]
 
 ToBatchJointsState_SRC_TYPE = (
     PbJointStateStamped
@@ -59,14 +48,14 @@ ToBatchJointsState_SRC_TYPE = (
 class ToBatchJointsState(
     MessageConverterStateless[
         ToBatchJointsState_SRC_TYPE,
-        BatchJointsStateStamped,
+        BatchJointsState,
     ]
 ):
-    """Convert to BatchJointsStateStamped.
+    """Convert to BatchJointsState.
 
     This class accepts either a single `JointStateStamped` or
     `MultiJointStateStamped`, or a list of either type.
-    The output is a `BatchJointsStateStamped` object containing
+    The output is a `BatchJointsState` object containing
     the joint states in a batch format.
 
     """
@@ -126,9 +115,7 @@ class ToBatchJointsState(
                         else torch.nan
                     )
 
-    def convert(
-        self, src: ToBatchJointsState_SRC_TYPE
-    ) -> BatchJointsStateStamped:
+    def convert(self, src: ToBatchJointsState_SRC_TYPE) -> BatchJointsState:
         src = self._format_input(src)
         batch_size = len(src)
         if batch_size == 0:
@@ -139,7 +126,7 @@ class ToBatchJointsState(
             joint_num = 1
             batch_size = len(src)
             t = torch.zeros(size=(batch_size, joint_num), dtype=self._dtype)
-            ret = BatchJointsStateStamped(
+            ret = BatchJointsState(
                 position=t.clone()
                 if src[0].state.HasField("position")
                 else None,
@@ -148,7 +135,7 @@ class ToBatchJointsState(
                 else None,
                 effort=t.clone() if src[0].state.HasField("effort") else None,
                 names=None,
-                timestamps=[state.timestamp for state in src],
+                timestamps=[state.timestamp.ToNanoseconds() for state in src],
             )
             # set p, v, e
             self._set_joint_states(
@@ -164,7 +151,7 @@ class ToBatchJointsState(
             joint_num = len(src[0].states)
             batch_size = len(src)
             t = torch.zeros(size=(batch_size, joint_num), dtype=self._dtype)
-            ret = BatchJointsStateStamped(
+            ret = BatchJointsState(
                 position=t.clone()
                 if src[0].states[0].HasField("position")
                 else None,
@@ -175,7 +162,7 @@ class ToBatchJointsState(
                 if src[0].states[0].HasField("effort")
                 else None,
                 names=None,
-                timestamps=[state.timestamp for state in src],
+                timestamps=[state.timestamp.ToNanoseconds() for state in src],
             )
             # set p, v, e
             for i, state in enumerate(src):

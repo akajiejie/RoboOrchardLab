@@ -17,10 +17,11 @@ dependencies = [
     "huggingface_hub",
     # metric
     "torchmetrics>=1.6",
+    "datasets>=3.2.0",
     # robo orchard
     # "robo_orchard_core>=0.1.0", # This should be used in release version.
     # use git url to install the latest version. This is for non-release version only.
-    "robo_orchard_core@git+https://github.com/HorizonRobotics/robo_orchard_core.git@ace5e73f8a09b2a180134bf9ff32d4a80d68e0bf",
+    "robo_orchard_core@git+https://github.com/HorizonRobotics/robo_orchard_core.git@404c3030f0ecbae2decc338ae1de0289efa890b6",
 ]
 license = "Apache-2.0"
 license-files = ["LICENSE", "NOTICE"]
@@ -45,7 +46,6 @@ mcap_datasets = [
     "mcap>=1.2.2",
     "foxglove-schemas-protobuf>=0.3.0",
     "opencv-python",
-    "datasets>=3.2.0",
     "robo_orchard_schemas@git+https://github.com/HorizonRobotics/robo_orchard_schemas.git@4a2920a718a8395aeb3b5e8e16c5c924ff6e0f07",
 ]
 all = ["robo_orchard_lab[bip3d,sem,mcap_datasets]"]
@@ -182,4 +182,4 @@ enableExperimentalFeatures = false
 typeCheckingMode = "basic"
 reportRedeclaration = false
 include = ["robo_orchard_lab", "tests"]
-exclude = ["robo_orchard_lab/distributed/__init__.py"]
+# exclude = ["robo_orchard_lab/distributed/__init__.py"]

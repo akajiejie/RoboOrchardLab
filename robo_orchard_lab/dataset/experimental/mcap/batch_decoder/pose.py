@@ -37,9 +37,9 @@ from robo_orchard_lab.dataset.experimental.mcap.batch_decoder.base import (
     McapBatchDecoderConfig,
 )
 from robo_orchard_lab.dataset.experimental.mcap.msg_converter import (  # noqa: E501
-    BatchPoseStamped,
+    BatchPose,
     TensorTargetConfigMixin,
-    ToBatchPoseStampedConfig,
+    ToBatchPoseConfig,
 )
 
 __all__ = [
@@ -48,11 +48,11 @@ __all__ = [
 ]
 
 
-class McapBatch2BatchPose(McapBatchDecoder[BatchPoseStamped]):
+class McapBatch2BatchPose(McapBatchDecoder[BatchPose]):
     def __init__(self, config: McapBatch2BatchPoseConfig):
         super().__init__()
         self._cfg = config
-        self._msg_cvt = ToBatchPoseStampedConfig(
+        self._msg_cvt = ToBatchPoseConfig(
             device=config.device, dtype=config.dtype
         )()
         self._required_topics = set([config.source_topic])
@@ -60,7 +60,7 @@ class McapBatch2BatchPose(McapBatchDecoder[BatchPoseStamped]):
     def require_topics(self) -> set[str]:
         return self._required_topics
 
-    def format_batch(self, decoded_msgs: dict[str, list]) -> BatchPoseStamped:
+    def format_batch(self, decoded_msgs: dict[str, list]) -> BatchPose:
         return self._msg_cvt.convert(decoded_msgs[self._cfg.source_topic])
 
 

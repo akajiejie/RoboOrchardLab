@@ -24,8 +24,6 @@ from foxglove_schemas_protobuf.PoseInFrame_pb2 import (
 from foxglove_schemas_protobuf.PosesInFrame_pb2 import (
     PosesInFrame as FgPosesInFrame,
 )
-from google.protobuf.timestamp_pb2 import Timestamp
-from pydantic import SkipValidation
 from robo_orchard_core.datatypes.geometry import BatchPose
 from robo_orchard_core.utils.torch_utils import dtype_str2torch
 
@@ -40,38 +38,23 @@ from robo_orchard_lab.utils.protobuf import (
 )
 
 __all__ = [
-    "BatchPoseStamped",
-    "ToBatchPoseStamped",
-    "ToBatchPoseStampedConfig",
+    "BatchPose",
+    "ToBatchPose",
+    "ToBatchPoseConfig",
 ]
-
-
-class BatchPoseStamped(BatchPose):
-    timestamps: list[SkipValidation[Timestamp] | None] | None = None
-    """Timestamp for the joint states"""
-
-    def __post_init__(self):
-        super().__post_init__()
-        if self.timestamps is not None:
-            assert len(self.timestamps) == self.batch_size, (
-                f"Batch size {self.batch_size} does not match number of "
-                f"timestamps {len(self.timestamps)}."
-            )
 
 
 ToBatchPose_SRC_TYPE = FgPoseInFrame | FgPosesInFrame | list[FgPoseInFrame]
 
 
-class ToBatchPoseStamped(
-    MessageConverterStateless[ToBatchPose_SRC_TYPE, BatchPoseStamped]
-):
-    def __init__(self, cfg: ToBatchPoseStampedConfig):
+class ToBatchPose(MessageConverterStateless[ToBatchPose_SRC_TYPE, BatchPose]):
+    def __init__(self, cfg: ToBatchPoseConfig):
         super().__init__()
         self._cfg = cfg
         self._dtype = dtype_str2torch(cfg.dtype)
 
-    def convert(self, src: ToBatchPose_SRC_TYPE) -> BatchPoseStamped:
-        ts_list: list[Timestamp] = []
+    def convert(self, src: ToBatchPose_SRC_TYPE) -> BatchPose:
+        ts_list: list[int] = []
         pose_list: list[FgPose] = []
         frame_id = ""
         if isinstance(src, list):
@@ -81,7 +64,7 @@ class ToBatchPoseStamped(
                     f"got {type(src)}."
                 )
             for i, pose_in_frame in enumerate(src):
-                ts_list.append(pose_in_frame.timestamp)
+                ts_list.append(pose_in_frame.timestamp.ToNanoseconds())
                 pose_list.append(pose_in_frame.pose)
                 assert pose_in_frame.frame_id == src[0].frame_id, (
                     f"All poses in the list must have the same frame_id, "
@@ -91,11 +74,11 @@ class ToBatchPoseStamped(
             frame_id = src[0].frame_id
         elif is_protobuf_msg_type(src, FgPoseInFrame):
             frame_id = src.frame_id
-            ts_list.append(src.timestamp)
+            ts_list.append(src.timestamp.ToNanoseconds())
             pose_list.append(src.pose)
         elif is_protobuf_msg_type(src, FgPosesInFrame):
             frame_id = src.frame_id
-            ts_list.append(src.timestamp)
+            ts_list.append(src.timestamp.ToNanoseconds())
             pose_list.extend(src.poses)
         else:
             raise TypeError(
@@ -106,11 +89,9 @@ class ToBatchPoseStamped(
         if len(ts_list) == 1 and len(pose_list) > 1:
             # If only one timestamp but multiple poses, repeat the timestamp
             for _ in range(len(pose_list) - 1):
-                ts = Timestamp()
-                ts.CopyFrom(ts_list[0])
-                ts_list.append(ts)
+                ts_list.append(ts_list[0])
 
-        ret = BatchPoseStamped(
+        ret = BatchPose(
             xyz=torch.zeros(
                 size=(len(pose_list), 3),
                 dtype=self._dtype,
@@ -140,8 +121,8 @@ class ToBatchPoseStamped(
         return ret.to(device=self._cfg.device)
 
 
-class ToBatchPoseStampedConfig(
-    MessageConverterConfig[ToBatchPoseStamped],
-    TensorTargetConfigMixin[ToBatchPoseStamped],
+class ToBatchPoseConfig(
+    MessageConverterConfig[ToBatchPose],
+    TensorTargetConfigMixin[ToBatchPose],
 ):
-    class_type: type[ToBatchPoseStamped] = ToBatchPoseStamped
+    class_type: type[ToBatchPose] = ToBatchPose
