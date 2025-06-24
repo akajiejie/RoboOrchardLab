@@ -137,6 +137,9 @@ class BBox3DDecoder(nn.Module):
                 nn.init.constant_(m.layers[-1].weight, 1)
                 nn.init.constant_(m.layers[-2].bias.data[2:], 0.0)
 
+    def save_metadata(self, directory, *args, **kwargs):
+        self.instance_bank.save_anchor(directory)
+
     def forward(
         self,
         feature_maps,

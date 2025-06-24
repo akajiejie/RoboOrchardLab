@@ -57,6 +57,14 @@ class BIP3D(ModelMixin):
                 bias=True,
             )
 
+    def save_model(self, directory: str, model_prefix: str = "model"):
+        super().save_model(directory, model_prefix)
+        for module in [self.text_encoder, self.decoder]:
+            if hasattr(module, "save_metadata") and callable(
+                module.save_metadata
+            ):
+                module.save_metadata(directory, model_prefix)
+
     def extract_feat(self, inputs):
         imgs = inputs.get(self.input_2d)
         if imgs.dim() == 5:

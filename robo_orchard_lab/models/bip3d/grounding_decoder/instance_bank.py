@@ -14,6 +14,8 @@
 # implied. See the License for the specific language governing
 # permissions and limitations under the License.
 
+import os
+
 import numpy as np
 import torch
 from torch import nn
@@ -34,7 +36,12 @@ class InstanceBank(nn.Module):
         super(InstanceBank, self).__init__()
         self.embed_dims = embed_dims
 
+        self.anchor_name = "anchor.npy"
         if isinstance(anchor, str):
+            if os.path.isabs(anchor):
+                self.anchor_name = os.path.split(anchor)[-1]
+            else:
+                self.anchor_name = anchor
             anchor = np.load(anchor)
         elif isinstance(anchor, (list, tuple)):
             anchor = np.array(anchor)
@@ -48,6 +55,13 @@ class InstanceBank(nn.Module):
             requires_grad=feat_grad,
         )
         self.anchor_in_camera = anchor_in_camera
+
+    def save_anchor(self, directory):
+        output_file = os.path.join(directory, self.anchor_name)
+        output_dir = os.path.dirname(output_file)
+        if not os.path.exists(output_dir):
+            os.makedirs(output_dir)
+        np.save(output_file, self.anchor)
 
     def init_weight(self):
         self.anchor.data = self.anchor.data.new_tensor(self.anchor_init)

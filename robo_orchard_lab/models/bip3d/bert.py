@@ -18,6 +18,7 @@
 # https://github.com/open-mmlab/mmdetection
 # Modifications have been made to fit the needs of this project.
 
+import os
 from collections import OrderedDict
 from typing import Sequence
 
@@ -134,6 +135,7 @@ class BertModel(nn.Module):
         **kwargs,
     ) -> None:
         super().__init__(**kwargs)
+        self.name = name
         self.max_tokens = max_tokens
         self.pad_to_max = pad_to_max
         self.return_tokenized = return_tokenized
@@ -171,6 +173,15 @@ class BertModel(nn.Module):
             self.special_tokens = self.tokenizer.convert_tokens_to_ids(
                 special_tokens_list
             )
+
+    def save_metadata(self, directory, *args, **kwargs):
+        directory = os.path.join(directory, self.name)
+        if not os.path.exists(directory):
+            os.makedirs(directory)
+        self.tokenizer.save_pretrained(directory)
+        self.language_backbone[0].model.save_pretrained(
+            directory, safe_serialization=False
+        )
 
     def forward(self, captions: Sequence[str], **kwargs) -> dict:
         """Forward function."""

@@ -70,7 +70,7 @@ h5py==3.13.0
 First, run RoboTwin to obtain the expert data from the simulation.
 
 ```bash
-git clone https://github.com/TianxingChen/RoboTwin.git
+git clone https://github.com/RoboTwin-Platform/RoboTwin.git
 cd RoboTwin
 git checkout CVPR-Challenge-2025-Round2
 
