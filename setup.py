@@ -40,6 +40,8 @@ LICENSE_HEADER = """# Project RoboOrchard
 # permissions and limitations under the License.
 """
 
+HORIZON_CI = os.environ.get("HORIZON_CI", default="0") == "1"
+
 
 class VersionPostfixNotExist(Exception):
     pass
@@ -114,5 +116,79 @@ def get_version() -> str:
     return full_version
 
 
+def wrap_github_dependency(
+    dependencies: list[str] | dict[str, list[str]],
+):
+    if not HORIZON_CI:
+        return dependencies
+
+    replace_pair = (
+        "github.com/HorizonRobotics/",
+        "jh-gitlab.hobot.cc/dep/robot-lab/open-source/",
+    )
+
+    if isinstance(dependencies, list):
+        return [dep.replace(*replace_pair) for dep in dependencies]
+    elif isinstance(dependencies, dict):
+        for k, v in dependencies.items():
+            dependencies[k] = [dep.replace(*replace_pair) for dep in v]
+        return dependencies
+    else:
+        raise TypeError(
+            "dependencies should be a list or a dict, "
+            f"but got {type(dependencies)}"
+        )
+
+
 if __name__ == "__main__":
-    setup(version=get_version())
+    install_requires = [
+        "pydantic",
+        "torch>=2.4.0",
+        "torchvision>=0.19.0",
+        "numpy",
+        "accelerate",
+        "tqdm",
+        "deprecated",
+        "timeout-decorator",
+        "requests",
+        "huggingface_hub",
+        # metric
+        "torchmetrics>=1.6",
+        "datasets>=3.2.0",
+        # robo orchard
+        # "robo_orchard_core>=0.1.0", # This should be used in release version.
+        # use git url to install the latest version.
+        # This is for non-release version only.
+        "robo_orchard_core@git+https://github.com/HorizonRobotics/robo_orchard_core.git@404c3030f0ecbae2decc338ae1de0289efa890b6",
+    ]
+    # optional dependencies
+    extras_require = {
+        "bip3d": [
+            "transformers<=4.49.0",
+            "terminaltables",
+            "pytorch3d",
+            "ninja",
+        ],
+        "sem": [
+            "robo_orchard_lab[bip3d]",
+            "diffusers",
+            "lmdb",
+            "pytorch-kinematics",
+            "h5py",
+        ],
+        "mcap_datasets": [
+            "mcap-protobuf-support>=0.5.3",
+            "mcap-ros2-support",
+            "mcap>=1.2.2",
+            "foxglove-schemas-protobuf>=0.3.0",
+            "opencv-python",
+            "robo_orchard_schemas@git+https://github.com/HorizonRobotics/robo_orchard_schemas.git@4a2920a718a8395aeb3b5e8e16c5c924ff6e0f07",
+        ],
+        "all": ["robo_orchard_lab[bip3d,sem,mcap_datasets]"],
+    }
+
+    setup(
+        version=get_version(),
+        install_requires=wrap_github_dependency(install_requires),
+        extras_require=wrap_github_dependency(extras_require),
+    )
