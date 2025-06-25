@@ -58,3 +58,12 @@ repos:
         exclude: (?x)(^3rdparty/)
         files: \.(ipynb)$
         types: [file]
+
+  - repo: local
+    hooks:
+      - id: check-license-header
+        name: Check Python file license header
+        entry: python3 scm/qac/check_license_header.py
+        language: python
+        types: [python]
+        exclude: (?x)(^3rdparty/|^docs/|^scm/)

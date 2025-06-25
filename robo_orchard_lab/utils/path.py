@@ -15,8 +15,9 @@
 # permissions and limitations under the License.
 
 import os
+from contextlib import contextmanager
 
-__all__ = ["DirectoryNotEmptyError", "is_empty_directory"]
+__all__ = ["DirectoryNotEmptyError", "is_empty_directory", "in_cwd"]
 
 
 class DirectoryNotEmptyError(Exception):
@@ -33,3 +34,41 @@ def is_empty_directory(directory: str) -> bool:
         return False
     except StopIteration:
         return True
+
+
+@contextmanager
+def in_cwd(destination: str):
+    """Context manager to temporarily change the current working directory.
+
+    This provides a safe way to perform operations within a specific directory.
+    It changes the directory to the given path upon entering the 'with'
+    block and guarantees that the original directory is restored upon exiting,
+    even if an exception occurs.
+
+    Args:
+        destination (str): The path of the directory to change into.
+
+    Yields:
+        str: The changed directory
+
+    Example:
+        >>> import os
+        >>> if not os.path.exists("my_temp_dir"):
+        ...     os.makedirs("my_temp_dir")
+        >>> original_dir = os.getcwd()
+        >>> print(f"Starting in: {original_dir}")
+        Starting in: /path/to/current
+        >>> with in_cwd("my_temp_dir"):
+        ...     print(f"Inside 'with' block: {os.getcwd()}")
+        Inside 'with' block: /path/to/current/my_temp_dir
+        >>> print(f"Back in: {os.getcwd()}")
+        Back in: /path/to/current
+        >>> os.getcwd() == original_dir
+        True
+    """
+    try:
+        original_path = os.getcwd()
+        os.chdir(destination)
+        yield destination
+    finally:
+        os.chdir(original_path)

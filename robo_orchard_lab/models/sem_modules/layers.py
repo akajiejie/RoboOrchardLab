@@ -176,8 +176,8 @@ class RotaryAttention(nn.Module):
         if identity is None:
             identity = query
 
-        B, N, C = query.shape
-        M = key.shape[1]
+        B, N, C = query.shape  # noqa: N806
+        M = key.shape[1]  # noqa: N806
         q = self.q_proj(query)
         k = self.k_proj(key)
         if value is None:
@@ -254,8 +254,8 @@ class JointGraphAttention(nn.Module):
     ):
         if identity is None:
             identity = query
-        B, N, C = query.shape
-        M = key.shape[1]
+        B, N, C = query.shape  # noqa: N806
+        M = key.shape[1]  # noqa: N806
         q = self.q_proj(query)
         k = self.k_proj(key)
         v = self.v_proj(key)

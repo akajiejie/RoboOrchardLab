@@ -29,6 +29,7 @@ from safetensors.torch import load_file, save_file
 from robo_orchard_lab.utils import set_env
 from robo_orchard_lab.utils.path import (
     DirectoryNotEmptyError,
+    in_cwd,
     is_empty_directory,
 )
 
@@ -227,6 +228,8 @@ class ModelMixin(torch.nn.Module, ClassInitFromConfigMixin):
                     repo_type="model",
                 )
 
+        directory = os.path.abspath(directory)
+
         if not os.path.exists(directory):
             raise FileNotFoundError(f"checkpoint {directory} does not exists!")
 
@@ -235,7 +238,10 @@ class ModelMixin(torch.nn.Module, ClassInitFromConfigMixin):
         with open(config_file, "r") as f:
             cfg: TorchModuleCfg = load_config_class(f.read())  # type: ignore
 
-        with set_env(ORCHARD_LAB_CHECKPOINT_DIRECTORY=directory):
+        with (
+            in_cwd(directory),
+            set_env(ORCHARD_LAB_CHECKPOINT_DIRECTORY=directory),
+        ):
             model = cfg()
 
         if not load_model:

@@ -48,7 +48,9 @@ auto-format:
 	python3 scm/lint/check_lint.py --auto_format
 
 check-lint:
-	python3 scm/lint/check_lint.py
+	@python3 scm/lint/check_lint.py
+	@pre-commit run check-merge-conflict
+	@pre-commit run check-license-header --all-files
 
 dist-build: version
 	@mkdir -p build/dist

@@ -2,14 +2,14 @@
 #
 # Copyright (c) 2024-2025 Horizon Robotics. All Rights Reserved.
 #
-# Licensed under the Apache License, Version 2.0 (the License);
+# Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
 #
 #       http://www.apache.org/licenses/LICENSE-2.0
 #
 # Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an AS IS BASIS,
+# distributed under the License is distributed on an "AS IS" BASIS,
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
 # implied. See the License for the specific language governing
 # permissions and limitations under the License.
@@ -117,11 +117,11 @@ class DeformableFeatureAggregation(nn.Module):
         nn.init.xavier_uniform_(self.output_proj.weight.data, 0.0)
         nn.init.constant(self.output_proj.bias.data, 0.0)
 
-    def get_spatial_shape_3D(self, spatial_shape, depth_dim):
+    def get_spatial_shape_3D(self, spatial_shape, depth_dim):  # noqa: N802
         spatial_shape_depth = (
             spatial_shape.new_ones(*spatial_shape.shape[:-1], 1) * depth_dim
         )
-        spatial_shape_3D = torch.cat(
+        spatial_shape_3D = torch.cat(  # noqa: N806
             [spatial_shape, spatial_shape_depth], dim=-1
         )
         return spatial_shape_3D.contiguous()

@@ -329,7 +329,7 @@ class DepthProbLabelGenerator:
     def __call__(self, data):
         depth = data["depths"]
         if self.origin_stride != 1:
-            H, W = depth.shape[1:3]
+            H, W = depth.shape[1:3]  # noqa: N806
             depth = [
                 cv2.resize(
                     x,
@@ -358,7 +358,7 @@ class DepthProbLabelGenerator:
             (depth - y) / (depth_gt - y),
             0,
         )
-        views, H, W, _ = depth.shape
+        views, H, W, _ = depth.shape  # noqa: N806
         gt = []
         for s in self.stride:
             gt_tmp = np.reshape(

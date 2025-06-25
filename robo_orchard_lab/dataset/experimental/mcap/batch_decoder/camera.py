@@ -39,7 +39,7 @@ __all__ = [
 ]
 
 
-def to_FgCameraCompressedImages(
+def to_FgCameraCompressedImages(  # noqa: N802
     decoded_msgs: dict[str, list], cfg: CameraDataSourceMixin
 ) -> FgCameraCompressedImages:
     msg_batch = FgCameraCompressedImages(images=decoded_msgs[cfg.image_topic])

@@ -107,7 +107,7 @@ def compute_iou3d(bbox_1, bbox_2, eps=1e-4):
     return box3d_overlap(corners_1, corners_2, eps=eps)[1]
 
 
-def compute_precision_recall_AP(pred, gt, iou_thr, area_range=None):
+def compute_precision_recall_AP(pred, gt, iou_thr, area_range=None):  # noqa: N802
     gt_bbox_code_size = 9
     pred_bbox_code_size = 9
     for img_id in gt.keys():
@@ -193,7 +193,7 @@ def compute_precision_recall_AP(pred, gt, iou_thr, area_range=None):
     tp_thr = [np.zeros(num_preds) for i in iou_thr]
     fp_thr = [np.zeros(num_preds) for i in iou_thr]
     for d in range(num_preds):
-        R = class_recs[image_ids[d]]
+        R = class_recs[image_ids[d]]  # noqa: N806
         gt_bbox = R["bbox"]
         cur_iou = ious[d]
 
@@ -225,7 +225,7 @@ def compute_precision_recall_AP(pred, gt, iou_thr, area_range=None):
     return ret
 
 
-def compute_precision_recall_AP_multi_cls(
+def compute_precision_recall_AP_multi_cls(  # noqa: N802
     pred, gt, iou_thresholds, area_range=None
 ):
     recall = [{} for _ in iou_thresholds]

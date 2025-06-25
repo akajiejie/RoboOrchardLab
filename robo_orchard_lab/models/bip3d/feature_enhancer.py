@@ -95,7 +95,7 @@ def get_encoder_reference_points(
     """
 
     reference_points_list = []
-    for lvl, (H, W) in enumerate(spatial_shapes):
+    for lvl, (H, W) in enumerate(spatial_shapes):  # noqa: N806
         ref_y, ref_x = torch.meshgrid(
             torch.linspace(
                 0.5, H - 0.5, H, dtype=torch.float32, device=device

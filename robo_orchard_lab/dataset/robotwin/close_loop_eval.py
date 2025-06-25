@@ -44,7 +44,7 @@ def class_decorator(task_name):
 def deploy_data_process(dataset, obs, task_name, joint_state=None):
     images = []
     depths = []
-    T_world2cam = []
+    T_world2cam = []  # noqa: N806
     intrinsic = []
     for camera_data in obs["observation"].values():
         if dataset.load_image:
@@ -99,7 +99,7 @@ def deploy_data_process(dataset, obs, task_name, joint_state=None):
     return data, joint_state
 
 
-def update_task_config(task_args, CONFIGS_PATH):
+def update_task_config(task_args, CONFIGS_PATH):  # noqa: N803
     embodiment_type = task_args.get("embodiment")
     embodiment_config_path = os.path.join(
         CONFIGS_PATH, "_embodiment_config.yml"

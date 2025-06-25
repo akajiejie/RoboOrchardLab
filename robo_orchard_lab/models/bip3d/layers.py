@@ -343,7 +343,7 @@ class SinePositionalEncoding(nn.Module):
         assert not (mask is None and input is None)
 
         if mask is not None:
-            B, H, W = mask.size()
+            B, H, W = mask.size()  # noqa: N806
             device = mask.device
             # For convenience of exporting to ONNX,
             # it's required to convert
@@ -354,7 +354,7 @@ class SinePositionalEncoding(nn.Module):
             x_embed = not_mask.cumsum(2, dtype=torch.float32)
         else:
             # single image or batch image with no padding
-            B, _, H, W = input.shape
+            B, _, H, W = input.shape  # noqa: N806
             device = input.device
             x_embed = torch.arange(
                 1, W + 1, dtype=torch.float32, device=device
@@ -610,7 +610,7 @@ class BiMultiHeadAttention(nn.Module):
             # Do not increase 50000, data type half has quite limited range
             attn_weights = torch.clamp(attn_weights, max=self.MAX_CLAMP_VALUE)
 
-        attn_weights_T = attn_weights.transpose(1, 2)
+        attn_weights_T = attn_weights.transpose(1, 2)  # noqa: N806
         attn_weights_l = (
             attn_weights_T - torch.max(attn_weights_T, dim=-1, keepdim=True)[0]
         )

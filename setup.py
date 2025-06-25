@@ -43,7 +43,7 @@ LICENSE_HEADER = """# Project RoboOrchard
 HORIZON_CI = os.environ.get("HORIZON_CI", default="0") == "1"
 
 
-class VersionPostfixNotExist(Exception):
+class VersionPostfixNotExist(Exception):  # noqa: N818
     pass
 
 

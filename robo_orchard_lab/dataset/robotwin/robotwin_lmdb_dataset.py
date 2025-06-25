@@ -106,8 +106,8 @@ class RoboTwinLmdbDataset(BaseLmdbManipulationDataset):
         lazy_init=False,
         num_episode=None,
         cam_names=None,
-        T_base2world=None,
-        T_base2ego=None,
+        T_base2world=None,  # noqa: N803
+        T_base2ego=None,  # noqa: N803
         default_space="base",
         instructions=None,
     ):
@@ -124,7 +124,7 @@ class RoboTwinLmdbDataset(BaseLmdbManipulationDataset):
         self.cam_names = cam_names
         if T_base2world is None:
             logger.warning("dataset T_base2world is not set, use default.")
-            T_base2world = np.array(
+            T_base2world = np.array(  # noqa: N806
                 [
                     [0, -1, 0, 0],
                     [1, 0, 0, -0.65],
@@ -133,7 +133,7 @@ class RoboTwinLmdbDataset(BaseLmdbManipulationDataset):
                 ]
             )
         elif isinstance(T_base2world, List):
-            T_base2world = np.array(T_base2world)
+            T_base2world = np.array(T_base2world)  # noqa: N806
         self.T_base2world = T_base2world
         self.T_base2ego = T_base2ego
         assert default_space in ["base", "world", "ego"]
@@ -163,7 +163,7 @@ class RoboTwinLmdbDataset(BaseLmdbManipulationDataset):
         else:
             cam_names = self.meta_lmdbs[lmdb_index][f"{uuid}/camera_names"]
 
-        _T_world2cam = self.meta_lmdbs[lmdb_index][f"{uuid}/extrinsic"]
+        _T_world2cam = self.meta_lmdbs[lmdb_index][f"{uuid}/extrinsic"]  # noqa: N806
         _intrinsic = self.meta_lmdbs[lmdb_index][f"{uuid}/intrinsic"]
 
         if self.load_image:
@@ -171,7 +171,7 @@ class RoboTwinLmdbDataset(BaseLmdbManipulationDataset):
         if self.load_depth:
             depths = []
 
-        T_world2cam = []
+        T_world2cam = []  # noqa: N806
         intrinsic = []
         for cam_name in cam_names:
             if self.load_image:
@@ -206,7 +206,7 @@ class RoboTwinLmdbDataset(BaseLmdbManipulationDataset):
             images = np.stack(images)
         if self.load_depth:
             depths = np.stack(depths)
-        T_world2cam = np.stack(T_world2cam)
+        T_world2cam = np.stack(T_world2cam)  # noqa: N806
         intrinsic = np.stack(intrinsic)
 
         joint_state = self.meta_lmdbs[lmdb_index][
@@ -265,7 +265,7 @@ class RoboTwinLmdbDataset(BaseLmdbManipulationDataset):
             start_idx = self.cumsum_steps[episode_index - 1]
         else:
             start_idx = 0
-        videoWriter = None
+        videoWriter = None  # noqa: N806
         fourcc = cv2.VideoWriter_fourcc(*"mp4v")
         uuid = self.__getitem__(start_idx)["uuid"]
         file = os.path.join(output_path, f"{uuid}.mp4")
@@ -284,7 +284,7 @@ class RoboTwinLmdbDataset(BaseLmdbManipulationDataset):
             )
 
             if videoWriter is None:
-                videoWriter = cv2.VideoWriter(
+                videoWriter = cv2.VideoWriter(  # noqa: N806
                     file,
                     fourcc,
                     fps // interval,

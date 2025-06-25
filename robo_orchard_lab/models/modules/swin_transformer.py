@@ -395,12 +395,12 @@ class PatchMerging(nn.Module):
             Tensor: Has shape (B, Merged_H * Merged_W, C_out).
             Tuple[int]: Spatial shape of x, arrange as (Merged_H, Merged_W).
         """  # noqa: E501
-        B, L, C = x.shape
+        B, L, C = x.shape  # noqa: N806
         assert isinstance(input_size, Sequence), (
             f"Expect input_size is `Sequence` but get {input_size}"
         )
 
-        H, W = input_size
+        H, W = input_size  # noqa: N806
         assert L == H * W, "input feature has wrong size"
 
         x = x.view(B, H, W, C).permute([0, 3, 1, 2])  # B, C, H, W
@@ -409,7 +409,7 @@ class PatchMerging(nn.Module):
 
         if self.adap_padding:
             x = self.adap_padding(x)
-            H, W = x.shape[-2:]
+            H, W = x.shape[-2:]  # noqa: N806
 
         x = self.sampler(x)
         # if kernel_size=2 and stride=2, x should has shape (B, 4*C, H/2*W/2)
@@ -478,7 +478,7 @@ class WindowMSA(nn.Module):
         )  # 2*Wh-1 * 2*Ww-1, nH
 
         # About 2x faster than original impl
-        Wh, Ww = self.window_size
+        Wh, Ww = self.window_size  # noqa: N806
         rel_index_coords = self.double_step_seq(2 * Ww - 1, Wh, 1, Ww)
         rel_position_index = rel_index_coords + rel_index_coords.T
         rel_position_index = rel_position_index.flip(1).contiguous()
@@ -504,7 +504,7 @@ class WindowMSA(nn.Module):
             mask (Tensor | None): Mask with shape of (num_windows, Wh*Ww, Wh*Ww),
                 value should be between (-inf, 0].
         """  # noqa: E501
-        B, N, C = x.shape
+        B, N, C = x.shape  # noqa: N806
         qkv = (
             self.qkv(x)
             .reshape(B, N, 3, self.num_heads, C // self.num_heads)
@@ -529,7 +529,7 @@ class WindowMSA(nn.Module):
         attn = attn + relative_position_bias.unsqueeze(0)
 
         if mask is not None:
-            nW = mask.shape[0]
+            nW = mask.shape[0]  # noqa: N806
             attn = attn.view(
                 B // nW, nW, self.num_heads, N, N
             ) + mask.unsqueeze(1).unsqueeze(0)
@@ -606,8 +606,8 @@ class ShiftWindowMSA(nn.Module):
         )
 
     def forward(self, query, hw_shape):
-        B, L, C = query.shape
-        H, W = hw_shape
+        B, L, C = query.shape  # noqa: N806
+        H, W = hw_shape  # noqa: N806
         assert L == H * W, "input feature has wrong size"
         query = query.view(B, H, W, C)
 
@@ -615,7 +615,7 @@ class ShiftWindowMSA(nn.Module):
         pad_r = (self.window_size - W % self.window_size) % self.window_size
         pad_b = (self.window_size - H % self.window_size) % self.window_size
         query = F.pad(query, (0, 0, 0, pad_r, 0, pad_b))
-        H_pad, W_pad = query.shape[1], query.shape[2]
+        H_pad, W_pad = query.shape[1], query.shape[2]  # noqa: N806
 
         # cyclic shift
         if self.shift_size > 0:
@@ -687,7 +687,7 @@ class ShiftWindowMSA(nn.Module):
         x = self.drop(x)
         return x
 
-    def window_reverse(self, windows, H, W):
+    def window_reverse(self, windows, H, W):  # noqa: N803
         """Window reverse.
 
         Args:
@@ -700,7 +700,7 @@ class ShiftWindowMSA(nn.Module):
 
         """
         window_size = self.window_size
-        B = int(windows.shape[0] / (H * W / window_size / window_size))
+        B = int(windows.shape[0] / (H * W / window_size / window_size))  # noqa: N806
         x = windows.view(
             B, H // window_size, W // window_size, window_size, window_size, -1
         )
@@ -716,7 +716,7 @@ class ShiftWindowMSA(nn.Module):
         Returns:
             windows: (num_windows*B, window_size, window_size, C)
         """
-        B, H, W, C = x.shape
+        B, H, W, C = x.shape  # noqa: N806
         window_size = self.window_size
         x = x.view(
             B, H // window_size, window_size, W // window_size, window_size, C

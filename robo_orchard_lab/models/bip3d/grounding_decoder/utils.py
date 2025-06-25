@@ -2,14 +2,14 @@
 #
 # Copyright (c) 2024-2025 Horizon Robotics. All Rights Reserved.
 #
-# Licensed under the Apache License, Version 2.0 (the License);
+# Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
 #
 #       http://www.apache.org/licenses/LICENSE-2.0
 #
 # Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an AS IS BASIS,
+# distributed under the License is distributed on an "AS IS" BASIS,
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
 # implied. See the License for the specific language governing
 # permissions and limitations under the License.
@@ -123,10 +123,12 @@ def rotation_3d_in_euler(points, angles, return_mat=False):
     ], f"Points size should be 2 or 3 instead of {points.shape[-1]}"
 
     if angles.shape[1] == 3:
-        rot_mat_T = euler_angles_to_matrix(angles, "ZXY")  # N, 3,3
+        rot_mat_T = euler_angles_to_matrix(  # noqa: N806
+            angles, "ZXY"
+        )  # N, 3,3
     else:
-        rot_mat_T = quaternion_to_matrix(angles)  # N, 3,3
-    rot_mat_T = rot_mat_T.transpose(-2, -1)
+        rot_mat_T = quaternion_to_matrix(angles)  # N, 3,3  # noqa: N806
+    rot_mat_T = rot_mat_T.transpose(-2, -1)  # noqa: N806
 
     if points.shape[0] == 0:
         points_new = points
@@ -138,7 +140,7 @@ def rotation_3d_in_euler(points, angles, return_mat=False):
 
     if return_mat:
         if batch_free:
-            rot_mat_T = rot_mat_T.squeeze(0)
+            rot_mat_T = rot_mat_T.squeeze(0)  # noqa: N806
         return points_new, rot_mat_T
     else:
         return points_new
