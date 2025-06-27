@@ -29,7 +29,7 @@ sys.path.insert(0, os.path.join(os.path.abspath(os.path.dirname(__file__))))
 import re
 from collections import OrderedDict
 
-from doc_gen import gen_index
+from doc_gen import autodoc_process_docstring_event, gen_index, patch_autoapi
 from pydantic import BaseModel
 from recommonmark.parser import CommonMarkParser
 from recommonmark.transform import AutoStructify
@@ -448,6 +448,10 @@ def setup(app):
     app.add_config_value("recommonmark_config", {}, True)
     patch_autodoc(app)
     autoapi_skip_member(app)
+    # patch autoapi to support customize docstring
+    patch_autoapi()
+    app.connect("autodoc-process-docstring", autodoc_process_docstring_event)
+
     gen_index(
         jinja_template_path="index.jinja", gallery_dirs_dict=build_gallery_dict
     )

@@ -13,7 +13,20 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
 # implied. See the License for the specific language governing
 # permissions and limitations under the License.
+import importlib
 
-from .autoapi_patch import patch_autoapi
-from .autodoc_ext import autodoc_process_docstring_event
-from .index import *
+IGNORE_PARENT_PACKAGES = ["transformers."]
+
+
+def autodoc_process_docstring_event(app, what, name, obj, options, lines):
+    if what != "class":
+        return
+
+    for base_class in obj.bases:
+        if any((base_class.startswith(pkg) for pkg in IGNORE_PARENT_PACKAGES)):
+            module_path, class_name = obj.obj["full_name"].rsplit(".", 1)
+            module = importlib.import_module(module_path)
+            live_class = getattr(module, class_name)
+            if live_class.__doc__ is None:
+                lines.clear()
+                break
