@@ -15,7 +15,7 @@
 # permissions and limitations under the License.
 
 from __future__ import annotations
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any, Literal
 
 import pyarrow as pa
@@ -35,15 +35,17 @@ from robo_orchard_lab.dataset.datatypes.hg_features.tensor import (
     TypedTensorFeature,
 )
 
+__all__ = [
+    "BatchJointsStateFeature",
+    "BatchJointsState",
+]
+
 
 @hg_dataset_feature
 @dataclass
 class BatchJointsStateFeature(RODataFeature, FeatureDecodeMixin):
     dtype: Literal["float32", "float64"] = "float32"
     decode: bool = True
-    _type: str = field(
-        default="BatchJointsStateFeature", init=False, repr=False
-    )
 
     def __post_init__(self):
         self._typed_tensor_feature = TypedTensorFeature(

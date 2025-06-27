@@ -13,6 +13,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
 # implied. See the License for the specific language governing
 # permissions and limitations under the License.
+
 from __future__ import annotations
 from bisect import bisect_left
 from dataclasses import dataclass
@@ -174,6 +175,8 @@ class McapMessageBatch:
     message_dict: dict[str, McapMessagesTuple]
     is_last_batch: bool = False
 
+    last_messages: dict[str, McapMessageTuple] | None = None
+
     @property
     def min_log_times(self) -> dict[str, int]:
         """Return the minimum log time for each topic in the batch."""
@@ -325,6 +328,42 @@ class McapMessageBatch:
         else:
             for messages_tuple in other:
                 self.append(messages_tuple)
+
+    def merge_last_messages(self, sort: bool = True) -> None:
+        """Merge the last messages in the batch.
+
+        After merge, the last messages will be cleared.
+
+        Args:
+            sort (bool, optional): Whether to sort the messages after merging.
+                Defaults to True.
+        """
+        if self.last_messages is None:
+            return
+
+        for topic, msg in self.last_messages.items():
+            if topic not in self.message_dict:
+                self.message_dict[topic] = McapMessagesTuple(
+                    schema=msg.schema,
+                    channel=msg.channel,
+                    messages=[msg.message],
+                )
+                continue
+            is_msg_already_in_batch = False
+            for m in self.message_dict[topic].messages:
+                if (
+                    m.log_time == msg.message.log_time
+                    and m.data == msg.message.data
+                ):
+                    is_msg_already_in_batch = True
+                    break
+            if not is_msg_already_in_batch:
+                self.message_dict[topic].messages.append(msg.message)
+                if sort:
+                    self.message_dict[topic].sort(
+                        key="log_time", reverse=False
+                    )
+        self.last_messages = None
 
 
 @dataclass

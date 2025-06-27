@@ -14,8 +14,13 @@
 # implied. See the License for the specific language governing
 # permissions and limitations under the License.
 
-import robo_orchard_lab.dataset.datatypes.hg_features
+import os
+import tempfile
 
-from .camera import *
-from .geometry import *
-from .joint_state import *
+import pytest
+
+
+@pytest.fixture(scope="session")
+def tmp_local_folder():
+    with tempfile.TemporaryDirectory(dir=os.path.abspath("./")) as temp_dir:
+        yield temp_dir

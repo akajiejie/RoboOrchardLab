@@ -23,7 +23,69 @@ from datasets.features.features import (
     Features,
 )
 
-from robo_orchard_lab.dataset.datatypes.geometry import BatchFrameTransform
+from robo_orchard_lab.dataset.datatypes.geometry import (
+    BatchFrameTransform,
+    BatchPose,
+)
+
+
+class TestBatchPose:
+    @pytest.mark.parametrize("dataset_from", ["dict", "generator"])
+    def test_as_huggingface_dataset(
+        self, dataset_from: Literal["dict", "generator"]
+    ):
+        data: list[BatchPose] = [
+            BatchPose(
+                xyz=torch.tensor([[1.0, 2.0, 3.0]], dtype=torch.float32),
+                quat=torch.tensor(
+                    [[4, 5, 6, 7]],
+                    dtype=torch.float32,
+                ),
+                frame_id="camera",
+            ),
+            BatchPose(
+                xyz=torch.tensor([[1.0, 2.0, 3.0]], dtype=torch.float32),
+                quat=torch.tensor(
+                    [[4, 5, 6, 7]],
+                    dtype=torch.float32,
+                ),
+                frame_id="camera",
+                timestamps=[
+                    1,
+                ],
+            ),
+        ]
+
+        feature = data[0].dataset_feature()
+        features = Features({"data": feature})
+        if dataset_from == "generator":
+            # Use a generator to create the dataset
+            def dataset_iter():
+                for item in data:
+                    yield features.encode_example({"data": item})
+
+            dataset = Dataset.from_generator(
+                dataset_iter,
+                features=features,
+                streaming=True,
+            )
+        elif dataset_from == "dict":
+            dataset = Dataset.from_dict(
+                {"data": [item for item in data]},
+                features=features,
+            )
+        else:
+            raise ValueError(f"Unknown dataset_from value: {dataset_from}")
+
+        for original, recovered in zip(data, dataset, strict=True):
+            recovered = recovered["data"]
+            assert isinstance(recovered, BatchPose)
+
+            # Check the properties of the recovered object
+            assert torch.equal(original.xyz, recovered.xyz)
+            assert torch.equal(original.quat, recovered.quat)
+            assert original.frame_id == recovered.frame_id
+            assert original.timestamps == recovered.timestamps
 
 
 class TestBatchFrameTransform:

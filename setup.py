@@ -155,11 +155,14 @@ if __name__ == "__main__":
         # metric
         "torchmetrics>=1.6",
         "datasets>=3.2.0",
+        "sqlalchemy",
+        "duckdb-engine",
+        "fsspec",
         # robo orchard
         # "robo_orchard_core>=0.1.0", # This should be used in release version.
         # use git url to install the latest version.
         # This is for non-release version only.
-        "robo_orchard_core@git+https://github.com/HorizonRobotics/robo_orchard_core.git@404c3030f0ecbae2decc338ae1de0289efa890b6",
+        "robo_orchard_core@git+https://github.com/HorizonRobotics/robo_orchard_core.git@faa3d1b3aaeafbf17bbe064e3e88db4dbb40bd8b",
     ]
     # optional dependencies
     extras_require = {

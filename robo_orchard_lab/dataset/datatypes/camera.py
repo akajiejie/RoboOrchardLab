@@ -16,7 +16,7 @@
 
 from __future__ import annotations
 import copy
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any, Literal
 
 import pyarrow as pa
@@ -42,6 +42,17 @@ from robo_orchard_lab.dataset.datatypes.hg_features.tensor import (
     TypedTensorFeature,
 )
 
+__all__ = [
+    "DistortionFeature",
+    "Distortion",
+    "BatchCameraInfoFeature",
+    "BatchCameraInfo",
+    "BatchCameraDataEncodedFeature",
+    "BatchCameraDataEncoded",
+    "BatchCameraDataFeature",
+    "BatchCameraData",
+]
+
 
 @hg_dataset_feature
 @dataclass
@@ -54,7 +65,6 @@ class DistortionFeature(RODataFeature, FeatureDecodeMixin):
 
     dtype: Literal["float32", "float64"] = "float32"
     decode: bool = True
-    _type: str = field(default="DistortionFeature", init=False, repr=False)
 
     def __post_init__(self):
         self._typed_tensor_feature = TypedTensorFeature(
@@ -119,9 +129,6 @@ class BatchCameraInfoFeature(RODataFeature, FeatureDecodeMixin):
 
     dtype: Literal["float32", "float64"] = "float32"
     decode: bool = True
-    _type: str = field(
-        default="BatchCameraInfoFeature", init=False, repr=False
-    )
 
     def __post_init__(self):
         self._typed_tensor_feature = TypedTensorFeature(
@@ -209,9 +216,6 @@ class BatchCameraDataEncodedFeature(RODataFeature, FeatureDecodeMixin):
 
     dtype: Literal["float32", "float64"] = "float32"
     decode: bool = True
-    _type: str = field(
-        default="BatchCameraDataEncodedFeature", init=False, repr=False
-    )
 
     def __post_init__(self):
         self._camera_info_feature = BatchCameraInfoFeature(
@@ -288,9 +292,6 @@ class BatchCameraDataFeature(RODataFeature, FeatureDecodeMixin):
 
     dtype: Literal["float32", "float64"] = "float32"
     decode: bool = True
-    _type: str = field(
-        default="BatchCameraDataFeature", init=False, repr=False
-    )
 
     def __post_init__(self):
         self._camera_info_feature = BatchCameraInfoFeature(
@@ -303,7 +304,15 @@ class BatchCameraDataFeature(RODataFeature, FeatureDecodeMixin):
 
     @property
     def pa_type(self) -> pa.StructType:
-        return self._camera_info_feature.pa_type
+        field_list = [
+            pa.field(
+                "sensor_data", self._sensor_data_feature.pa_type, nullable=True
+            ),
+            pa.field("pix_fmt", pa.string(), nullable=True),
+            pa.field("timestamps", pa.list_(pa.int64()), nullable=True),
+        ]
+        field_list.extend(self._camera_info_feature.pa_type.fields)
+        return pa.struct(field_list)
 
     def encode_example(
         self, value: _BatchCameraData | None

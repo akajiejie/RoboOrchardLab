@@ -16,7 +16,7 @@
 
 from __future__ import annotations
 from abc import ABCMeta, abstractmethod
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 import pyarrow as pa
@@ -54,7 +54,7 @@ class RODataFeature(metaclass=ABCMeta):
 
     """
 
-    _type: str
+    _type: str = field(init=False, repr=False)
     """The class name of the feature type. Needed for serialization
     and deserialization. Should be set in subclasses."""
 
@@ -97,6 +97,7 @@ def hg_dataset_feature(
     """Decorator to register a feature class with its type."""
     if not issubclass(cls, RODataFeature):
         raise TypeError("Feature class must inherit from RODataFeature.")
+    cls._type = cls.__qualname__
     register_feature(cls, cls._type)
     return cls
 

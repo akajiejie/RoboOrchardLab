@@ -13,25 +13,6 @@ classifiers = [
 ]
 requires-python = ">=3.10"
 
-# [project.optional-dependencies]
-# bip3d = ["transformers<=4.49.0", "terminaltables", "pytorch3d", "ninja"]
-# sem = [
-#     "robo_orchard_lab[bip3d]",
-#     "diffusers",
-#     "lmdb",
-#     "pytorch-kinematics",
-#     "h5py",
-# ]
-# mcap_datasets = [
-#     "mcap-protobuf-support>=0.5.3",
-#     "mcap-ros2-support",
-#     "mcap>=1.2.2",
-#     "foxglove-schemas-protobuf>=0.3.0",
-#     "opencv-python",
-#     "robo_orchard_schemas@git+https://github.com/HorizonRobotics/robo_orchard_schemas.git@4a2920a718a8395aeb3b5e8e16c5c924ff6e0f07",
-# ]
-# all = ["robo_orchard_lab[bip3d,sem,mcap_datasets]"]
-
 [project.urls]
 Homepage = "https://github.com/HorizonRobotics/robo_orchard_lab"
 Repository = "https://github.com/HorizonRobotics/robo_orchard_lab"

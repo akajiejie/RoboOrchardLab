@@ -128,7 +128,10 @@ autoapi_ignore = [
 autoapi_python_use_implicit_namespaces = True
 autoapi_options = [
     "members",
-    "inherited-members",
+    # "inherited-members",
+    # Do not show inherited members because 3rdparty libs may not satisfy
+    # the sphinx doc generation. This will bring in a lot of warnings
+    # and error.
     "undoc-members",
     "show-inheritance",
     "show-module-summary",

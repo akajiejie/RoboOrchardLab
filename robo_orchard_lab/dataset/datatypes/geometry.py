@@ -16,12 +16,13 @@
 
 from __future__ import annotations
 import copy
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Literal
 
 import pyarrow as pa
 from robo_orchard_core.datatypes.geometry import (
     BatchFrameTransform as _BatchFrameTransform,
+    BatchPose as _BatchPose,
     BatchTransform3D as _BatchTransform3D,
 )
 
@@ -36,6 +37,15 @@ from robo_orchard_lab.dataset.datatypes.hg_features.tensor import (
     TypedTensorFeature,
 )
 
+__all__ = [
+    "BatchTransform3DFeature",
+    "BatchTransform3D",
+    "BatchPoseFeature",
+    "BatchPose",
+    "BatchFrameTransformFeature",
+    "BatchFrameTransform",
+]
+
 
 @hg_dataset_feature
 @dataclass
@@ -48,9 +58,6 @@ class BatchTransform3DFeature(RODataFeature, FeatureDecodeMixin):
 
     dtype: Literal["float32", "float64"] = "float32"
     decode: bool = True
-    _type: str = field(
-        default="BatchTransform3DFeature", init=False, repr=False
-    )
 
     def __post_init__(self):
         self._typed_tensor_feature = TypedTensorFeature(
@@ -115,16 +122,56 @@ class BatchTransform3D(_BatchTransform3D, ToDataFeatureMixin):
 
 @hg_dataset_feature
 @dataclass
+class BatchPoseFeature(BatchTransform3DFeature):
+    """A feature for storing batch poses in a dataset.
+
+    The underlying data is stored as a serialized numpy array
+    with additional metadata about the poses.
+    """
+
+    @property
+    def pa_type(self) -> pa.StructType:
+        parent_fields = list(super().pa_type.fields)
+        parent_fields.append(pa.field("frame_id", pa.string()))
+        return pa.struct(parent_fields)
+
+    def encode_example(self, value: _BatchPose | None) -> dict | None:
+        if value is None:
+            return None
+        parent_ret = super().encode_example(value)
+        assert parent_ret is not None
+        parent_ret["frame_id"] = value.frame_id
+        return parent_ret
+
+    def decode_example(self, value: dict | None, **kwargs) -> BatchPose | None:
+        if not self.decode:
+            raise RuntimeError(
+                "Decoding is disabled for this feature. Please use "
+                "BatchPoseFeature(decode=True) instead."
+            )
+        if value is None:
+            return None
+        parent_ret = super().decode_example(value)
+        return BatchPose(frame_id=value["frame_id"], **parent_ret.__dict__)
+
+
+class BatchPose(_BatchPose, ToDataFeatureMixin):
+    def dataset_feature(
+        self, dtype: Literal["float32", "float64"] = "float32"
+    ) -> BatchPoseFeature:
+        ret = BatchPoseFeature(dtype=dtype)
+        check_fields_consistency(type(self), ret.pa_type)
+        return ret
+
+
+@hg_dataset_feature
+@dataclass
 class BatchFrameTransformFeature(BatchTransform3DFeature):
     """A feature for storing batch frame transforms in a dataset.
 
     The underlying data is stored as a serialized numpy array
     with additional metadata about the frame transforms.
     """
-
-    _type: str = field(
-        default="BatchFrameTransformFeature", init=False, repr=False
-    )
 
     @property
     def pa_type(self) -> pa.StructType:

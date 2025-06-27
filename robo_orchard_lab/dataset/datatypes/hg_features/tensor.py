@@ -14,7 +14,7 @@
 # implied. See the License for the specific language governing
 # permissions and limitations under the License.
 from __future__ import annotations
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from io import BytesIO
 from typing import TypedDict
 
@@ -45,8 +45,6 @@ class AnyTensorFeature(RODataFeature, FeatureDecodeMixin):
 
     decode: bool = True
     as_torch_tensor: bool = True
-
-    _type: str = field(default="AnyTensorFeature", init=False, repr=False)
 
     @property
     def pa_type(self):
@@ -96,7 +94,6 @@ class TypedTensorFeature(RODataFeature, FeatureDecodeMixin):
     dtype: str
     decode: bool = True
     as_torch_tensor: bool = True
-    _type: str = field(default="TypedTensorFeature", init=False, repr=False)
 
     @property
     def pa_type(self) -> pa.DataType:

@@ -266,6 +266,7 @@ def iter_messages_batch(
     batch_split: BatchSplitMixin,
     iter_config: Optional[MakeIterMsgArgs] = None,
     do_not_split_same_log_time: bool = True,
+    keep_last_topic_msgs: bool = True,
 ) -> Iterator[McapMessageBatch]:
     """Iterate over messages in batches.
 
@@ -280,6 +281,12 @@ def iter_messages_batch(
             that split must be done within the same log time, this will
             trigger a warning and yield the current batch as is. Defaults to
             True.
+        keep_last_topic_msgs (bool, optional): If True, keep the last messages
+            for each topic in the returned batch. This is useful for
+            maintaining the last message for each topic in the mcap file, such
+            as camera calibration message, which does not change during the
+            recording. Defaults to True.
+
     """
     if iter_config is None:
         iter_config = MakeIterMsgArgs()
@@ -291,7 +298,10 @@ def iter_messages_batch(
     if iter_config.reverse is not False:
         raise ValueError("Batch splitting does not support reverse iteration.")
 
+    last_msgs: dict[str, McapMessageTuple] = {}
+
     for msg in reader.iter_messages(iter_config=iter_config):
+        last_msgs[msg.channel.topic] = msg
         if batch_split.need_split(msg):
             # set the last_batch flat to false and
             # return the previous batch
@@ -325,6 +335,8 @@ def iter_messages_batch(
                 cur_batch = McapMessageBatch({}, is_last_batch=True)
 
         cur_batch.append(msg)
+        if keep_last_topic_msgs:
+            cur_batch.last_messages = last_msgs.copy()
 
     assert cur_batch is not None
     yield cur_batch
