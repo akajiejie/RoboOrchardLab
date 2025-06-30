@@ -300,8 +300,8 @@ html_theme_options = {
     # "top_of_page_button": "edit",
     # "source_branch": "master",
     # "source_directory": "docs/",
-    "light_logo": "logo/orchard_logo.png",
-    "dark_logo": "logo/orchard_logo.png",
+    "light_logo": "logo/logo.png",
+    "dark_logo": "logo/logo.png",
     "footer_icons": [
         {
             "name": "GitHub",

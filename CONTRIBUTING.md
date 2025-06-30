@@ -30,6 +30,14 @@ make auto-format
 make doc
 ```
 
+## Preview docs
+
+```bash
+cd build/docs_build/html
+python3 -m http.server {PORT}
+# open browser: http://localhost:{PORT}
+```
+
 ## Run test
 
 ```bash
