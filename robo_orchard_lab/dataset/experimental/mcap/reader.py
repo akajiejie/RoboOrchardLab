@@ -15,8 +15,7 @@
 # permissions and limitations under the License.
 
 from __future__ import annotations
-from dataclasses import dataclass
-from typing import IO, Any, Iterator, Optional, Sequence
+from typing import IO, TYPE_CHECKING, Iterator, Optional, Sequence
 
 from robo_orchard_core.utils.config import Config
 
@@ -25,14 +24,15 @@ from mcap.reader import (
     McapReader as _McapReader,
     make_reader as mcap_make_reader,
 )
-from mcap.records import (
-    Channel as McapChannel,
-    Message as McapMessage,
-    Schema as McapSchema,
+from robo_orchard_lab.dataset.experimental.mcap.messages import (
+    McapDecodedMessageTuple,
+    McapMessageTuple,
 )
-from robo_orchard_lab.dataset.experimental.mcap.msg_decoder import (
-    McapDecoderContext,
-)
+
+if TYPE_CHECKING:
+    from robo_orchard_lab.dataset.experimental.mcap.msg_decoder import (
+        McapDecoderContext,
+    )
 
 __all__ = [
     "McapMessageTuple",
@@ -40,39 +40,6 @@ __all__ = [
     "MakeIterMsgArgs",
     "McapReader",
 ]
-
-
-@dataclass
-class McapMessageTuple:
-    schema: Optional[McapSchema]
-    channel: McapChannel
-    message: McapMessage
-
-    def decode(self, decoder_ctx: McapDecoderContext) -> Any:
-        """Decode the message using the provided decoder context."""
-        return decoder_ctx.decode_message(
-            message_encoding=self.channel.message_encoding,
-            message=self.message,
-            schema=self.schema,
-        )
-
-
-@dataclass
-class McapDecodedMessageTuple(McapMessageTuple):
-    decoded_message: Any
-
-    def decode(self, decoder_ctx: McapDecoderContext) -> Any:
-        """Return the already decoded message.
-
-        If not decoded, decode it.
-        """
-        if self.decoded_message is None:
-            self.decoded_message = decoder_ctx.decode_message(
-                message_encoding=self.channel.message_encoding,
-                message=self.message,
-                schema=self.schema,
-            )
-        return self.decoded_message
 
 
 class MakeIterMsgArgs(Config):

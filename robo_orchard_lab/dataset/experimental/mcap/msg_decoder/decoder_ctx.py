@@ -64,9 +64,16 @@ class McapDecoderContext:
         """Enter the context manager, returning self."""
         return self
 
-    def __exit__(self, exc_type, exc_value, traceback) -> None:
+    def __exit__(
+        self,
+        exc_type: Optional[type],
+        exc_value: Optional[BaseException],
+        traceback: Optional[Any],
+    ) -> None:
         """Exit the context manager, resetting the context."""
         self.reset()
+        if exc_type is not None and exc_value is not None:
+            raise exc_value
 
     def decode_message(
         self,

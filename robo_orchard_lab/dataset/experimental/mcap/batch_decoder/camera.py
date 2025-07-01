@@ -44,15 +44,7 @@ def to_FgCameraCompressedImages(  # noqa: N802
 ) -> FgCameraCompressedImages:
     msg_batch = FgCameraCompressedImages(images=decoded_msgs[cfg.image_topic])
     if cfg.calib_topic is not None:
-        calibration = decoded_msgs.get(cfg.calib_topic, [])
-        if len(calibration) > 0:
-            msg_batch.calib = calibration[0]
-
-        if len(calibration) > 1:
-            raise ValueError(
-                f"Multiple camera calibration messages found for topic "
-                f"{cfg.calib_topic}. Expected only one."
-            )
+        msg_batch.calib = decoded_msgs.get(cfg.calib_topic, None)
     if cfg.tf_topic is not None:
         tf_msgs = decoded_msgs.get(cfg.tf_topic, [])
         if len(tf_msgs) > 0:

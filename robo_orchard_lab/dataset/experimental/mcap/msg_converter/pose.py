@@ -24,9 +24,9 @@ from foxglove_schemas_protobuf.PoseInFrame_pb2 import (
 from foxglove_schemas_protobuf.PosesInFrame_pb2 import (
     PosesInFrame as FgPosesInFrame,
 )
-from robo_orchard_core.datatypes.geometry import BatchPose
 from robo_orchard_core.utils.torch_utils import dtype_str2torch
 
+from robo_orchard_lab.dataset.datatypes.geometry import BatchPose
 from robo_orchard_lab.dataset.experimental.mcap.msg_converter.base import (
     MessageConverterConfig,
     MessageConverterStateless,

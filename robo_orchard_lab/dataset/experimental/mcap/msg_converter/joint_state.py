@@ -17,7 +17,6 @@
 from __future__ import annotations
 
 import torch
-from robo_orchard_core.datatypes.joint_state import BatchJointsState
 from robo_orchard_core.utils.torch_utils import dtype_str2torch
 from robo_orchard_schemas.sensor_msgs.JointState_pb2 import (
     JointState as PbJointState,
@@ -25,6 +24,7 @@ from robo_orchard_schemas.sensor_msgs.JointState_pb2 import (
     MultiJointStateStamped as PbMultiJointStateStamped,
 )
 
+from robo_orchard_lab.dataset.datatypes.joint_state import BatchJointsState
 from robo_orchard_lab.dataset.experimental.mcap.msg_converter.base import (
     MessageConverterConfig,
     MessageConverterStateless,

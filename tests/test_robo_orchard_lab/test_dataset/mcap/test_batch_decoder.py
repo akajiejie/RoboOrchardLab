@@ -34,8 +34,10 @@ from robo_orchard_lab.dataset.experimental.mcap.batch_split import (
     SplitBatchByTopics,
     iter_messages_batch,
 )
-from robo_orchard_lab.dataset.experimental.mcap.reader import (
+from robo_orchard_lab.dataset.experimental.mcap.msg_decoder import (
     McapDecoderContext,
+)
+from robo_orchard_lab.dataset.experimental.mcap.reader import (
     McapReader,
 )
 
@@ -144,11 +146,3 @@ class TestBatch2DataDict:
         for k in configs.keys():
             assert k in ret, f"Key {k} not found in the result"
             print(f"{k}: {type(ret[k])}")
-
-
-class TestBatch2JointState:
-    pass
-
-
-class TestBatch2TF:
-    pass

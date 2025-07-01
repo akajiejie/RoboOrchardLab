@@ -93,6 +93,10 @@ class DataFrame:
 
     features: dict[str, Any]
     instruction: InstructionData | None = None
+    timestamp_ns_min: int | None = None
+    """The minimum timestamp of the frame in nanoseconds."""
+    timestamp_ns_max: int | None = None
+    """The maximum timestamp of the frame in nanoseconds."""
 
 
 class EpisodePackaging(metaclass=ABCMeta):
@@ -131,6 +135,8 @@ class DatasetPackaging:
         "index",
         "episode_index",
         "frame_index",
+        "timestamp_min",  # The minimum timestamp of the frame in nanoseconds
+        "timestamp_max",  # The maximum timestamp of the frame in nanoseconds
         "task_index",
         "robot_index",
         "instruction_index",
@@ -166,11 +172,13 @@ class DatasetPackaging:
 
     def _extend_frame_with_index(
         self,
-        features: dict[str, Any],
+        # features: dict[str, Any],
+        frame: DataFrame,
         episode_meta: EpisodeMetaORM,
         instruction: Instruction | None,
     ):
         """Extend the frame with index fields."""
+        features = frame.features
         for key in self.preserved_index_keys:
             if key in features:
                 raise ValueError(
@@ -192,6 +200,8 @@ class DatasetPackaging:
                 "instruction_index": instruction.index
                 if instruction
                 else None,
+                "timestamp_min": frame.timestamp_ns_min,
+                "timestamp_max": frame.timestamp_ns_max,
             }
         )
 
@@ -246,8 +256,9 @@ class DatasetPackaging:
                     else None
                 )
                 self._extend_frame_with_index(
-                    frame.features, episode_meta_orm, instruction_orm
+                    frame, episode_meta_orm, instruction_orm
                 )
+                # encode_example here.
                 yield self._features.encode_example(frame.features)
                 # update status
                 if instruction_orm is not None:

@@ -30,12 +30,12 @@ from foxglove_schemas_protobuf.CompressedImage_pb2 import (
 from foxglove_schemas_protobuf.FrameTransform_pb2 import (
     FrameTransform as FgFrameTransform,
 )
-from robo_orchard_core.datatypes.camera_data import (
+
+from robo_orchard_lab.dataset.datatypes.camera import (
     BatchCameraData,
     BatchCameraDataEncoded,
     Distortion,
 )
-
 from robo_orchard_lab.dataset.experimental.mcap.msg_converter.base import (
     ClassConfig,
     MessageConverterConfig,
@@ -60,7 +60,7 @@ class FgCameraCompressedImages:
     images: list[FgCompressedImage]
     """List of compressed images."""
 
-    calib: FgCameraCalibration | None = None
+    calib: list[FgCameraCalibration] | FgCameraCalibration | None = None
     """Calibration data associated with the images."""
 
     tf: FgFrameTransform | list[FgFrameTransform] | None = None
@@ -81,6 +81,14 @@ class FgCameraCompressedImages:
                         "All images must have the same frame_id as the "
                         "child_frame_id of the FrameTransform."
                     )
+        if isinstance(self.calib, list) and len(self.calib) == 1:
+            self.calib = self.calib[0]
+        if isinstance(self.calib, list) and len(self.calib) != len(
+            self.images
+        ):
+            raise ValueError(
+                "If calib is a list, it must have the same length as images."
+            )
 
 
 class ToBatchCameraDataEncoded(
@@ -143,35 +151,70 @@ class ToBatchCameraDataEncoded(
 
     def _set_camera_calib(
         self,
-        calib: FgCameraCalibration | None,
+        calib: FgCameraCalibration | list[FgCameraCalibration] | None,
         target: BatchCameraData | BatchCameraDataEncoded,
     ) -> None:
         """Set the camera calibration."""
         if calib is None:
             return
-
-        batch_size = target.batch_size
+        if isinstance(calib, list):
+            if len(calib) == 0:
+                return
+            if len(calib) == 1:
+                calib = [calib[0]] * len(target.sensor_data)
+            if len(calib) != len(target.sensor_data):
+                raise ValueError(
+                    "If calib is a list, it must have the same length as "
+                    "sensor_data."
+                    f" Got {len(calib)} and {len(target.sensor_data)}."
+                )
+            for c in calib:
+                if c.height != calib[0].height:
+                    raise ValueError(
+                        "All camera calibrations must have the same height, "
+                        f"but got {c.height} and {calib[0].height}."
+                    )
+                if c.width != calib[0].width:
+                    raise ValueError(
+                        "All camera calibrations must have the same width, "
+                        f"but got {c.width} and {calib[0].width}."
+                    )
+                if c.distortion_model != calib[0].distortion_model:
+                    raise ValueError(
+                        "All camera calibrations must have the same "
+                        f"distortion model, but got {c.distortion_model} "
+                        f"and {calib[0].distortion_model}."
+                    )
+                if c.K != calib[0].K:
+                    raise ValueError(
+                        "All camera calibrations must have the same "
+                        f"intrinsic matrix, but got {c.K} and {calib[0].K}."
+                    )
+            calibs = calib
+        else:
+            calibs = [calib] * len(target.sensor_data)
 
         if target.image_shape is None:
             target.image_shape = (
-                calib.height,
-                calib.width,
+                calibs[0].height,
+                calibs[0].width,
             )
         else:
-            if target.image_shape != (calib.height, calib.width):
+            if target.image_shape != (calibs[0].height, calibs[0].width):
                 raise ValueError(
                     f"Image shape {target.image_shape} does not match "
-                    f"calibration shape {(calib.height, calib.width)}."
+                    f"calibration shape {(calibs[0].height, calibs[0].width)}."
                 )
-        target.intrinsic_matrices = (
-            torch.tensor(calib.K, dtype=torch.float32)
-            .reshape(-1, 3, 3)
-            .repeat(batch_size, 1, 1)
+        target.intrinsic_matrices = torch.stack(
+            [
+                torch.tensor(c.K, dtype=torch.float32).reshape(3, 3)
+                for c in calibs
+            ]
         )
 
         target.distortion = Distortion(
-            model=calib.distortion_model,  # type: ignore
-            coefficients=torch.tensor(calib.D, dtype=torch.float32),
+            model=calibs[0].distortion_model,  # type: ignore
+            coefficients=torch.tensor(calibs[0].D, dtype=torch.float32),
         )
 
 
@@ -207,7 +250,7 @@ class ToBatchCameraData(
         if self._cfg.pix_fmt == "rgb":
             # Convert BGR to RGB if needed
             ret.sensor_data = ret.sensor_data[..., ::-1]
-        return ret
+        return BatchCameraData(**ret.__dict__)
 
 
 T = TypeVar("T")

@@ -270,7 +270,7 @@ class BatchCameraDataEncodedFeature(RODataFeature, FeatureDecodeMixin):
         )
 
 
-class BatchCameraDataEncoded(_BatchCameraDataEncoded, ToDataFeatureMixin):
+class BatchCameraDataEncoded(BatchCameraInfo, _BatchCameraDataEncoded):
     """A class for batch camera data with dataset feature support."""
 
     def dataset_feature(
@@ -352,7 +352,7 @@ class BatchCameraDataFeature(RODataFeature, FeatureDecodeMixin):
         )
 
 
-class BatchCameraData(_BatchCameraData, ToDataFeatureMixin):
+class BatchCameraData(BatchCameraInfo, _BatchCameraData):
     """A class for batch camera data with dataset feature support."""
 
     def dataset_feature(

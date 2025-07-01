@@ -15,17 +15,11 @@
 # permissions and limitations under the License.
 
 from __future__ import annotations
-from bisect import bisect_left
 from dataclasses import dataclass
-from typing import Any, Iterator, Literal, Optional, Sequence
+from typing import TYPE_CHECKING, Any, Iterable, Literal, Sequence
 
-from mcap.records import (
-    Channel as McapChannel,
-    Message as McapMessage,
-    Schema as McapSchema,
-)
-from robo_orchard_lab.dataset.experimental.mcap.msg_decoder.decoder_ctx import (  # noqa: E501
-    McapDecoderContext,
+from robo_orchard_lab.dataset.experimental.mcap.messages import (
+    McapMessagesTuple,
 )
 from robo_orchard_lab.dataset.experimental.mcap.reader import (
     MakeIterMsgArgs,
@@ -33,139 +27,12 @@ from robo_orchard_lab.dataset.experimental.mcap.reader import (
     McapReader,
 )
 
+if TYPE_CHECKING:
+    from robo_orchard_lab.dataset.experimental.mcap.msg_decoder.decoder_ctx import (  # noqa: E501
+        McapDecoderContext,
+    )
+
 __all__ = ["McapDataRecordChunk", "McapDataRecordChunks"]
-
-
-@dataclass
-class McapMessagesTuple:
-    schema: Optional[McapSchema]
-    channel: McapChannel
-    messages: list[McapMessage]
-
-    @property
-    def min_log_time(self) -> int:
-        """Return the minimum log time of all messages."""
-        if not self.messages:
-            raise ValueError("No messages in the tuple.")
-        return min(msg.log_time for msg in self.messages)
-
-    @property
-    def max_log_time(self) -> int:
-        """Return the maximum log time of all messages."""
-        if not self.messages:
-            raise ValueError("No messages in the tuple.")
-        return max(msg.log_time for msg in self.messages)
-
-    def split(
-        self,
-        log_time: int,
-        is_sorted_asc: bool = False,
-    ) -> tuple[McapMessagesTuple | None, McapMessagesTuple | None]:
-        """Split the messages tuple into two parts based on the log time.
-
-        This method returns two new `McapMessagesTuple` instances:
-        - The first contains messages with `log_time < log_time`.
-        - The second contains messages with `log_time >= log_time`.
-
-        Args:
-            log_time (int): The log time to split the messages.
-            is_sorted_asc (bool, optional): Whether the messages are already
-                sorted in ascending order by log time. If True, a binary search
-                will be used to find the split point. Defaults to False.
-
-        """
-        left = []
-        right = []
-        if not is_sorted_asc:
-            for msg in self.messages:
-                if msg.log_time < log_time:
-                    left.append(msg)
-                else:
-                    right.append(msg)
-        else:
-            # If the messages are already sorted ascending by log_time,
-            # we can use binary search to find the split point.
-            idx = bisect_left(
-                self.messages, log_time, key=lambda msg: msg.log_time
-            )
-            left = self.messages[:idx]
-            right = self.messages[idx:]
-
-        ret_left = (
-            McapMessagesTuple(
-                schema=self.schema, channel=self.channel, messages=left
-            )
-            if len(left) > 0
-            else None
-        )
-        ret_right = (
-            McapMessagesTuple(
-                schema=self.schema, channel=self.channel, messages=right
-            )
-            if len(right) > 0
-            else None
-        )
-
-        return (ret_left, ret_right)
-
-    def sort(
-        self,
-        key: Literal["log_time", "publish_time"] = "log_time",
-        reverse: bool = False,
-    ) -> None:
-        """Sort the messages by log time."""
-        if key == "log_time":
-            # Sort by log_time, which is an attribute of McapMessage
-            self.messages.sort(key=lambda msg: msg.log_time, reverse=reverse)
-        elif key == "publish_time":
-            # Sort by pub_time, which is an attribute of McapMessage
-            self.messages.sort(
-                key=lambda msg: msg.publish_time, reverse=reverse
-            )
-        else:
-            raise ValueError(
-                f"Invalid sort key: {key}. Use 'log_time' or 'pub_time'."
-            )
-
-    def __iter__(self) -> Iterator[McapMessage]:
-        """Return an iterator over the messages in the tuple."""
-        return iter(self.messages)
-
-    def __getitem__(self, index: int) -> McapMessage:
-        return self.messages[index]
-
-    def __len__(self) -> int:
-        """Return the number of messages in the tuple."""
-        return len(self.messages)
-
-    def append(self, msg: McapMessage | McapMessageTuple) -> None:
-        """Append a new message to the messages tuple."""
-
-        if isinstance(msg, McapMessage):
-            self.messages.append(msg)
-        elif isinstance(msg, McapMessageTuple):
-            # check if the channel matches
-            if self.channel.topic != msg.channel.topic:
-                raise ValueError(
-                    f"Channel mismatch: {self.channel.topic} != {msg.channel.topic}"  # noqa: E501
-                )
-            self.messages.append(msg.message)
-        else:
-            raise TypeError(
-                "msg must be an instance of McapMessage or McapMessageTuple"
-            )
-
-    def decode(self, decoder_ctx: McapDecoderContext) -> list[Any]:
-        """Decode all messages in the tuple using the provided decoder context."""  # noqa: E501
-        decoded_messages = []
-        for msg in self.messages:
-            decoded_message = decoder_ctx.decode_message(
-                message_encoding=self.channel.message_encoding,
-                message=msg,
-                schema=self.schema,
-            )
-            decoded_messages.append(decoded_message)
-        return decoded_messages
 
 
 @dataclass
@@ -176,6 +43,38 @@ class McapMessageBatch:
     is_last_batch: bool = False
 
     last_messages: dict[str, McapMessageTuple] | None = None
+    """The last messages of each topic in the reader.
+
+    This field is used to store static messages that are not yet
+    included in the batch.
+    """
+
+    def filter_by_topic(self, keys: Iterable[str]) -> McapMessageBatch:
+        """Filter the batch by the specified keys (topics).
+
+        Args:
+            keys (Iterable[str]): The topics to filter by.
+
+        Returns:
+            McapMessageBatch: A new batch containing only the specified topics.
+        """
+        filtered_msgs = {}
+        for key in keys:
+            if key in self.message_dict:
+                filtered_msgs[key] = self.message_dict[key]
+
+        filtered_last_messages = None
+        if self.last_messages is not None:
+            filtered_last_messages = {}
+            for key in keys:
+                if key in self.last_messages:
+                    filtered_last_messages[key] = self.last_messages[key]
+
+        return McapMessageBatch(
+            message_dict=filtered_msgs,
+            is_last_batch=self.is_last_batch,
+            last_messages=filtered_last_messages,
+        )
 
     @property
     def min_log_times(self) -> dict[str, int]:

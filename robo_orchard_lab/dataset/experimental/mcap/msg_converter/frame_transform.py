@@ -20,9 +20,9 @@ import torch
 from foxglove_schemas_protobuf.FrameTransform_pb2 import (
     FrameTransform as FgFrameTransform,
 )
-from robo_orchard_core.datatypes.camera_data import BatchFrameTransform
 from robo_orchard_core.utils.torch_utils import dtype_str2torch
 
+from robo_orchard_lab.dataset.datatypes.geometry import BatchFrameTransform
 from robo_orchard_lab.dataset.experimental.mcap.msg_converter.base import (
     MessageConverterConfig,
     MessageConverterStateless,
