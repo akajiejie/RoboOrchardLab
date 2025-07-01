@@ -17,6 +17,7 @@ from __future__ import annotations
 import datetime
 import logging
 import time
+from collections import deque
 from typing import Iterable, Optional
 
 from accelerate import Accelerator
@@ -66,9 +67,9 @@ class StatsMonitor(PipelineHooks):
 
         self._start_time = None
 
-        # statistics for step callback
-        self._last_step_id = 0
-        self._step_start_time = None
+        # accumulated step tiems
+        self._step_times = deque(maxlen=cfg.window_size)
+        self._current_step_start_time = 0.0
 
         # statistics for epoch callback
         self._epoch_start_time = None
@@ -171,7 +172,7 @@ class StatsMonitor(PipelineHooks):
 
     def _estimate_remaining_time(
         self,
-        elapsed_time: float,
+        avg_step_time: float,
         current_step: int,
         current_epoch: int,
         start_step: int,
@@ -183,8 +184,8 @@ class StatsMonitor(PipelineHooks):
         """Estimates the remaining time based on average step time.
 
         Args:
-            elapsed_time (float): The total elapsed time since
-                training started.
+            avg_step_time (float): The average time per step, calculated from
+                a smoothing window.
             current_step (int): The current global step in the
                 training loop.
             current_epoch (int): The current epoch in the training loop.
@@ -223,12 +224,11 @@ class StatsMonitor(PipelineHooks):
                 total_steps,
             )
 
-        # Calculate elapsed and remaining steps
-        elapsed_steps = current_step - start_step + 1
         remain_steps = total_steps - current_step - 1
-        avg_step_time = elapsed_time / elapsed_steps
-        estimated_time = remain_steps * avg_step_time
+        if remain_steps <= 0:
+            return 0.0
 
+        estimated_time = remain_steps * avg_step_time
         return estimated_time
 
     def _on_loop_begin(self, args: PipelineHookArgs) -> None:
@@ -243,8 +243,7 @@ class StatsMonitor(PipelineHooks):
         self._estimate_data_stats(args.accelerator, args.dataloader)
 
     def _on_step_begin(self, args: PipelineHookArgs) -> None:
-        self._step_start_time = time.time()
-        self._last_step_id = args.global_step_id
+        self._current_step_start_time = time.time()
 
     def _on_step_end(self, args: PipelineHookArgs) -> None:
         """Callback when step ends.
@@ -256,35 +255,26 @@ class StatsMonitor(PipelineHooks):
             args (PipelineHookArgs): Hook arguments including current step
                 and epoch information.
         """
-        assert self._start_time is not None, (
-            "Please call `on_loop_begin` first."
-        )
         assert (
-            self._step_start_time is not None
-            and self.total_batch_size is not None
-        ), "Please call `on_step_begin` first."
+            self._start_time is not None and self.total_batch_size is not None
+        ), "Please call `on_loop_begin` first."
 
         # only log in the main process
         if not args.accelerator.is_main_process:
             return
 
+        step_duration = time.time() - self._current_step_start_time
+        self._step_times.append(step_duration)
+
         if (
             self.step_log_freq > 0
             and (args.global_step_id + 1) % self.step_log_freq == 0
         ):
-            elapsed_steps = args.global_step_id + 1 - self._last_step_id
-            self._last_step_id = args.global_step_id
-
-            avg_elapsed_step_time = (
-                time.time() - self._step_start_time
-            ) / elapsed_steps
-            self._step_start_time = time.time()
-
-            speed = self.total_batch_size / avg_elapsed_step_time
-            elapsed_time = time.time() - self._start_time
+            avg_step_time = sum(self._step_times) / len(self._step_times)
+            speed = self.total_batch_size / avg_step_time
 
             remaining_time = self._estimate_remaining_time(
-                elapsed_time=elapsed_time,
+                avg_step_time=avg_step_time,
                 current_step=args.global_step_id,
                 current_epoch=args.epoch_id,
                 start_step=args.start_step,
@@ -301,9 +291,13 @@ class StatsMonitor(PipelineHooks):
             else:
                 remaining_time_str = "N/A"
 
+            # reset states
+            self._last_step_id = args.global_step_id
+            self._step_start_time = time.time()
+
             msg = f"Epoch[{args.epoch_id}] Step[{args.step_id}] GlobalStep[{args.global_step_id}] "  # noqa: E501
             msg += f"Training Speed: {speed:.2f} samples/sec across all devices.\t"  # noqa: E501
-            msg += f"Average Step Time: {avg_elapsed_step_time:.2f} sec.\t"
+            msg += f"Average Step Time: {avg_step_time:.2f} sec.\t"
             msg += f"Estimated Remaining Time: {remaining_time_str}.\t"
 
             if args.optimizer is not None:
@@ -314,9 +308,10 @@ class StatsMonitor(PipelineHooks):
             logger.info(msg)
 
     def _on_epoch_begin(self, args: PipelineHookArgs) -> None:
-        self._epoch_start_time = time.time()
-        self._last_epoch_id = args.epoch_id
-        self._epoch_start_step_id = args.global_step_id
+        if self._epoch_start_time is None:
+            self._epoch_start_time = time.time()
+            self._last_epoch_id = args.epoch_id
+            self._epoch_start_step_id = args.global_step_id
 
     def _on_epoch_end(self, args: PipelineHookArgs) -> None:
         """Logs the average epoch time and resets the epoch start time.
@@ -345,33 +340,34 @@ class StatsMonitor(PipelineHooks):
             self.epoch_log_freq > 0
             and (args.epoch_id + 1) % self.epoch_log_freq == 0
         ):
-            elapsed_time = time.time() - self._epoch_start_time
-            self._epoch_start_time = time.time()
+            epoch_duration = time.time() - self._epoch_start_time
+            elapsed_epochs = args.epoch_id - self._last_epoch_id + 1
+            avg_epoch_time = epoch_duration / elapsed_epochs
+            elapsed_steps = args.global_step_id - self._epoch_start_step_id
+            avg_step_time = epoch_duration / elapsed_steps
 
-            elapsed_epoches = args.epoch_id - self._last_epoch_id + 1
-            self._last_epoch_id = args.epoch_id
+            if elapsed_steps > 0:
+                speed = self.total_batch_size / avg_step_time
+                speed_str = f"{speed:.2f}"
+            else:
+                speed_str = "N/A"
 
-            total_steps = args.global_step_id - self._epoch_start_step_id
-
-            self._epoch_start_step_id = args.global_step_id
-
-            avg_elapsed_epoches_time = elapsed_time / elapsed_epoches
-            avg_elapsed_step_time = elapsed_time / total_steps
-
-            speed = self.total_batch_size / avg_elapsed_step_time
-
-            remaining_time = self._estimate_remaining_time(
-                elapsed_time=time.time() - self._start_time,
-                # note that global_step_id is already upgrade after each step,
-                # so we have to minus 1 to keep it align with on_step_end
-                current_step=args.global_step_id - 1,
-                current_epoch=args.epoch_id,
-                start_step=args.start_step,
-                start_epoch=args.start_epoch,
-                max_step=args.max_step,
-                max_epoch=args.max_epoch,
-                steps_per_epoch=self.steps_per_epoch,
-            )
+            if len(self._step_times) > 0:
+                smooth_avg_step_time = sum(self._step_times) / len(
+                    self._step_times
+                )
+                remaining_time = self._estimate_remaining_time(
+                    avg_step_time=smooth_avg_step_time,
+                    current_step=args.global_step_id - 1,
+                    current_epoch=args.epoch_id,
+                    start_step=args.start_step,
+                    start_epoch=args.start_epoch,
+                    max_step=args.max_step,
+                    max_epoch=args.max_epoch,
+                    steps_per_epoch=self.steps_per_epoch,
+                )
+            else:
+                remaining_time = None
 
             if remaining_time is not None:
                 remaining_time_str = str(
@@ -380,11 +376,16 @@ class StatsMonitor(PipelineHooks):
             else:
                 remaining_time_str = "N/A"
 
+            # reset states for next epoch log
+            self._epoch_start_time = time.time()
+            self._last_epoch_id = args.epoch_id
+            self._epoch_start_step_id = args.global_step_id
+
             msg = f"Epoch[{args.epoch_id}] completed. "
-            msg += f"Training Speed: {speed:.2f} samples/sec across all devices.\t"  # noqa: E501
-            msg += f"Epoch Time: {elapsed_time:.2f} sec.\t"
-            msg += f"Average Epoch Time: {avg_elapsed_epoches_time:.2f} sec.\t"
-            msg += f"Average Step Time: {avg_elapsed_step_time:.2f} sec.\t"
+            msg += f"Epoch Time: {epoch_duration:.2f} sec.\t"
+            msg += f"Average Training Speed: {speed_str} samples/sec across all devices.\t"  # noqa: E501
+            msg += f"Average Epoch Time: {avg_epoch_time:.2f} sec.\t"
+            msg += f"Average Step Time: {avg_step_time:.2f} sec.\t"
             msg += f"Estimated Remaining Time: {remaining_time_str}.\t"
             if args.optimizer is not None:
                 msg += "Learning Rate: {:.5e}.\t".format(
@@ -414,3 +415,7 @@ class StatsMonitorConfig(PipelineHooksConfig[StatsMonitor]):
     epoch_log_freq: int = 1
     """Frequency to log stats at the epoch level. Logs are output every
     `epoch_log_freq` epochs."""
+
+    window_size: int = 128
+    """The size of the sliding window used to smooth the step time
+    calculation, making the remaining time estimate more stable."""
