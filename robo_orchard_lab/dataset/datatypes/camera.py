@@ -110,11 +110,12 @@ class DistortionFeature(RODataFeature, FeatureDecodeMixin):
 class Distortion(_Distortion, ToDataFeatureMixin):
     """A class for distortion parameters with dataset feature support."""
 
+    @classmethod
     def dataset_feature(
-        self, dtype: Literal["float32", "float64"] = "float32"
+        cls, dtype: Literal["float32", "float64"] = "float32"
     ) -> DistortionFeature:
         ret = DistortionFeature(dtype=dtype)
-        check_fields_consistency(type(self), ret.pa_type)
+        check_fields_consistency(cls, ret.pa_type)
         return ret
 
 
@@ -197,11 +198,12 @@ class BatchCameraInfoFeature(RODataFeature, FeatureDecodeMixin):
 class BatchCameraInfo(_BatchCameraInfo, ToDataFeatureMixin):
     """A class for batch camera info with dataset feature support."""
 
+    @classmethod
     def dataset_feature(
-        self, dtype: Literal["float32", "float64"] = "float32"
+        cls, dtype: Literal["float32", "float64"] = "float32"
     ) -> BatchCameraInfoFeature:
         ret = BatchCameraInfoFeature(dtype=dtype)
-        check_fields_consistency(type(self), ret.pa_type)
+        check_fields_consistency(cls, ret.pa_type)
         return ret
 
 
@@ -225,7 +227,7 @@ class BatchCameraDataEncodedFeature(RODataFeature, FeatureDecodeMixin):
     @property
     def pa_type(self) -> pa.StructType:
         field_list = [
-            pa.field("sensor_data", pa.list_(pa.string()), nullable=True),
+            pa.field("sensor_data", pa.list_(pa.binary()), nullable=True),
             pa.field("format", pa.string(), nullable=True),
             pa.field("timestamps", pa.list_(pa.int64()), nullable=True),
         ]
@@ -273,11 +275,12 @@ class BatchCameraDataEncodedFeature(RODataFeature, FeatureDecodeMixin):
 class BatchCameraDataEncoded(BatchCameraInfo, _BatchCameraDataEncoded):
     """A class for batch camera data with dataset feature support."""
 
+    @classmethod
     def dataset_feature(
-        self, dtype: Literal["float32", "float64"] = "float32"
+        cls, dtype: Literal["float32", "float64"] = "float32"
     ) -> BatchCameraDataEncodedFeature:
         ret = BatchCameraDataEncodedFeature(dtype=dtype)
-        check_fields_consistency(type(self), ret.pa_type)
+        check_fields_consistency(cls, ret.pa_type)
         return ret
 
 
@@ -355,9 +358,10 @@ class BatchCameraDataFeature(RODataFeature, FeatureDecodeMixin):
 class BatchCameraData(BatchCameraInfo, _BatchCameraData):
     """A class for batch camera data with dataset feature support."""
 
+    @classmethod
     def dataset_feature(
-        self, dtype: Literal["float32", "float64"] = "float32"
+        cls, dtype: Literal["float32", "float64"] = "float32"
     ) -> BatchCameraDataFeature:
         ret = BatchCameraDataFeature(dtype=dtype)
-        check_fields_consistency(type(self), ret.pa_type)
+        check_fields_consistency(cls, ret.pa_type)
         return ret

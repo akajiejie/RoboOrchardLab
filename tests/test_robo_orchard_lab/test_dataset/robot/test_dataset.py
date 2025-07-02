@@ -20,9 +20,14 @@ from typing import Generator
 
 import datasets as hg_datasets
 import pytest
+import torch
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from robo_orchard_lab.dataset.datatypes import (
+    BatchJointsState,
+    BatchJointsStateFeature,
+)
 from robo_orchard_lab.dataset.robot.dataset import RODataset
 from robo_orchard_lab.dataset.robot.db_orm import (
     Episode,
@@ -84,8 +89,13 @@ class DummyEpisodePackaging(EpisodePackaging):
         return hg_datasets.Features(
             {
                 "data": hg_datasets.Value("string"),
+                "joints": BatchJointsStateFeature(),
             }
         )
+        return {
+            "data": hg_datasets.Value("string"),
+            "joints": BatchJointsStateFeature(),
+        }
 
     def generate_frames(self) -> Generator[DataFrame, None, None]:
         for _ in range(self._gen_frame_num):
@@ -96,7 +106,11 @@ class DummyEpisodePackaging(EpisodePackaging):
                         random.choices(
                             string.ascii_lowercase, k=self._data_size
                         )
-                    )
+                    ),
+                    "joints": BatchJointsState(
+                        position=torch.rand(size=(3, 5)),
+                        # velocity=random.rand(7),
+                    ),
                 },
                 instruction=instruction,
             )
@@ -295,6 +309,8 @@ class TestDataset:
         assert len(dataset.frame_dataset) == 8
         assert "data" in dataset.frame_dataset.column_names
         assert dataset.db_engine is not None
+        assert dataset.dataset_format_version is not None
+        print("dataset_format_version: ", dataset.dataset_format_version)
 
     def test_check_db_engine(self, example_dataset_path: str):
         dataset = RODataset(dataset_path=example_dataset_path)

@@ -14,6 +14,7 @@
 # implied. See the License for the specific language governing
 # permissions and limitations under the License.
 
+import json
 import os
 from typing import TypeVar
 
@@ -32,9 +33,19 @@ from robo_orchard_lab.dataset.robot.db_orm import (
 from robo_orchard_lab.dataset.robot.engine import create_engine
 
 MetaType = TypeVar("MetaType", Episode, Instruction, Robot, Task)
+"""A type variable for metadata types in the RoboOrchard dataset."""
 
 
 class RODataset:
+    """The RoboOrchard dataset for robot data.
+
+    We use a tabular dataset to store the frame-level information, and a
+    separate database to store the episode-level information. The huggingface
+    datasets (pyarrow_dataset) is used as table format, and SQLAlchemy with
+    DuckDB are used to manage the database.
+
+    """
+
     frame_dataset: Dataset
     """The Hugging Face Dataset object containing the frame data."""
     db_engine: Engine
@@ -44,6 +55,17 @@ class RODataset:
         self.frame_dataset = Dataset.load_from_disk(
             dataset_path, storage_options=storage_options
         )
+        # recover state dict
+        from datasets import config as hg_datasets_config
+
+        state_file = os.path.join(
+            dataset_path, hg_datasets_config.DATASET_STATE_JSON_FILENAME
+        )
+        state: dict = json.load(open(state_file, "r"))
+        self._dataset_format_version = state.get("robo_orchard_state", {}).get(
+            "dataset_format_version", None
+        )
+        #
         fs: fsspec.AbstractFileSystem = fsspec.core.url_to_fs(dataset_path)[0]
         file_list = fs.ls(dataset_path, detail=False)
         db_candidate = [
@@ -70,7 +92,17 @@ class RODataset:
     def get_meta(
         self, meta_type: type[MetaType], index: int | None
     ) -> MetaType | None:
-        """Get all metadata of a specific type."""
+        """Get metadata of a specific type.
+
+        This method retrieves metadata from the database using index.
+        Possible metadata types include `Episode`, `Instruction`, `Robot`,
+        and `Task`.
+
+        Args:
+            meta_type (type[MetaType]): The type of metadata to retrieve.
+            index (int | None): The index of the metadata to retrieve.
+                If None, returns None.
+        """
         if index is None:
             return None
 
@@ -79,3 +111,8 @@ class RODataset:
             if ret is not None:
                 make_transient(ret)
             return ret
+
+    @property
+    def dataset_format_version(self) -> str | None:
+        """Get the dataset format version of loaded dataset."""
+        return self._dataset_format_version

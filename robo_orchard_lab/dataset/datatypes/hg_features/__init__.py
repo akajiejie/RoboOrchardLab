@@ -15,3 +15,4 @@
 # permissions and limitations under the License.
 
 from .base import *
+from .tensor import *

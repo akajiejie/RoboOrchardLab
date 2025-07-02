@@ -155,12 +155,20 @@ class McapMessageBatch:
                 right_dict[topic] = right_tuple
 
         left_ret = (
-            McapMessageBatch(left_dict, is_last_batch=self.is_last_batch)
+            McapMessageBatch(
+                left_dict,
+                is_last_batch=self.is_last_batch,
+                last_messages=self.last_messages,
+            )
             if len(left_dict) > 0
             else None
         )
         right_ret = (
-            McapMessageBatch(right_dict, is_last_batch=self.is_last_batch)
+            McapMessageBatch(
+                right_dict,
+                is_last_batch=self.is_last_batch,
+                last_messages=self.last_messages,
+            )
             if len(right_dict) > 0
             else None
         )
@@ -228,7 +236,9 @@ class McapMessageBatch:
             for messages_tuple in other:
                 self.append(messages_tuple)
 
-    def merge_last_messages(self, sort: bool = True) -> None:
+    def merge_last_messages(
+        self, sort: bool = True, missing_topic_only: bool = False
+    ) -> None:
         """Merge the last messages in the batch.
 
         After merge, the last messages will be cleared.
@@ -236,6 +246,10 @@ class McapMessageBatch:
         Args:
             sort (bool, optional): Whether to sort the messages after merging.
                 Defaults to True.
+            missing_topic_only (bool, optional): If True, only merge the last
+                messages for topics that are not already in the batch or have
+                no messages in the batch. If False, merge all last messages.
+                Defaults to False.
         """
         if self.last_messages is None:
             return
@@ -248,20 +262,23 @@ class McapMessageBatch:
                     messages=[msg.message],
                 )
                 continue
-            is_msg_already_in_batch = False
-            for m in self.message_dict[topic].messages:
-                if (
-                    m.log_time == msg.message.log_time
-                    and m.data == msg.message.data
-                ):
-                    is_msg_already_in_batch = True
-                    break
-            if not is_msg_already_in_batch:
-                self.message_dict[topic].messages.append(msg.message)
-                if sort:
-                    self.message_dict[topic].sort(
-                        key="log_time", reverse=False
-                    )
+            if not missing_topic_only or (
+                missing_topic_only and len(self.message_dict[topic]) == 0
+            ):
+                is_msg_already_in_batch = False
+                for m in self.message_dict[topic].messages:
+                    if (
+                        m.log_time == msg.message.log_time
+                        and m.data == msg.message.data
+                    ):
+                        is_msg_already_in_batch = True
+                        break
+                if not is_msg_already_in_batch:
+                    self.message_dict[topic].messages.append(msg.message)
+                    if sort:
+                        self.message_dict[topic].sort(
+                            key="log_time", reverse=False
+                        )
         self.last_messages = None
 
 

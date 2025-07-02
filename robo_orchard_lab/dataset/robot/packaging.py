@@ -20,6 +20,7 @@ from __future__ import annotations
 import json
 import os
 import pickle
+import warnings
 from abc import ABCMeta, abstractmethod
 from dataclasses import dataclass
 from typing import Any, Generator, Iterable
@@ -49,6 +50,8 @@ __all__ = [
     "EpisodeMeta",
     "DataFrame",
 ]
+
+dataset_format_version = "0.1.0"
 
 
 @dataclass
@@ -153,6 +156,10 @@ class DatasetPackaging:
         self._index_state: DatasetIndexState = DatasetIndexState()
         self._instruction_cache: InstructionCache = InstructionCache()
 
+    @property
+    def features(self) -> hg_datasets.Features:
+        return self._features
+
     def _check_and_update_features(
         self, features: hg_datasets.Features
     ) -> hg_datasets.Features:
@@ -239,8 +246,25 @@ class DatasetPackaging:
         engine = create_engine(url=url, echo=False)
         create_tables(engine=engine, base=DatasetORMBase)
 
+        def frame_generator(episode: EpisodePackaging):
+            try:
+                yield from episode.generate_frames()
+            except Exception as e:
+                warnings.warn(
+                    f"Failed to generate frames for {episode}. "
+                    f"Skipping this episode. Error: {e}"
+                )
+                return
+
         for episode in episodes:
-            episode_meta = episode.generate_episode_meta()
+            try:
+                episode_meta = episode.generate_episode_meta()
+            except Exception as e:
+                warnings.warn(
+                    f"Failed to generate episode metadata for {episode}. "
+                    f"Skipping this episode. Error: {e}"
+                )
+
             with Session(engine) as session:
                 episode_meta_orm = episode_meta.get_transient_orm(
                     self._index_state, session
@@ -249,7 +273,7 @@ class DatasetPackaging:
             episode_meta_orm.episode.dataset_begin_index = (
                 self._index_state.last_frame_idx + 1
             )
-            for frame in episode.generate_frames():
+            for frame in frame_generator(episode):
                 instruction_orm = (
                     self._add_instruction(frame.instruction, engine=engine)
                     if frame.instruction
@@ -259,7 +283,8 @@ class DatasetPackaging:
                     frame, episode_meta_orm, instruction_orm
                 )
                 # encode_example here.
-                yield self._features.encode_example(frame.features)
+                # yield self._features.encode_example(frame.features)
+                yield frame.features
                 # update status
                 if instruction_orm is not None:
                     self._index_state.last_instruction_idx = max(
@@ -373,6 +398,11 @@ class DatasetPackaging:
                 "_output_all_columns",
             ]
         }
+        state["robo_orchard_state"] = {}
+        state["robo_orchard_state"]["dataset_format_version"] = (
+            dataset_format_version
+        )
+
         state["_split"] = (
             str(dataset.split) if dataset.split is not None else dataset.split
         )
@@ -400,8 +430,11 @@ class DatasetPackaging:
         self,
         episodes: Iterable[EpisodePackaging],
         dataset_path: str,
-        max_shard_size: str | int | None = None,
+        dataset_info: hg_datasets.DatasetInfo | None = None,
+        writer_batch_size: int = 8,
+        max_shard_size: str | int = "2GB",
         split: hg_datasets.Split | None = None,
+        force_overwrite: bool = False,
     ):
         """Package the dataset and save it to the specified path.
 
@@ -409,11 +442,38 @@ class DatasetPackaging:
             episodes (Iterable[EpisodePackaging]): An iterable of episode
                 packaging instances.
             dataset_path (str): The path to save the packaged dataset.
+            dataset_info (hg_datasets.DatasetInfo | None): Information about
+                the dataset, such as description, citation, and homepage.
+                If None, use the default dataset info.
+            writer_batch_size (int): The batch size for writing the arrow file.
+                This may affect the performance of packaging or reading the
+                dataset later. Default is 8.
             max_shard_size (str | int | None): The maximum size of each shard.
                 If None, no sharding will be applied. This can be a string
                 like '10GB' or an integer representing the size in bytes.
                 default is "500MB".
+            split (hg_datasets.Split | None): The split of the dataset.
+                If None, use "train" as the default split.
+            force_overwrite (bool): If True, overwrite the existing dataset
+                at the specified path. If False, raise an error if the path
+                already exists. Default is False.
         """
+
+        if os.path.exists(dataset_path):
+            if not force_overwrite:
+                raise FileExistsError(
+                    f"The dataset path '{dataset_path}' already exists. "
+                    "Please remove it or set force_overwrite=True to overwrite."  # noqa: E501
+                )
+            else:
+                warnings.warn(
+                    f"The dataset path '{dataset_path}' already exists. "
+                    "It will be overwritten."
+                )
+                # Clean up the existing dataset path
+                import shutil
+
+                shutil.rmtree(dataset_path, ignore_errors=True)
 
         self._index_state: DatasetIndexState = DatasetIndexState()
         self._instruction_cache.clear()
@@ -426,34 +486,52 @@ class DatasetPackaging:
         db_folder = os.path.dirname(dataset_path)
         os.makedirs(db_folder, exist_ok=True)
         db_path = dataset_path + f"_meta.{self._database_driver}"
+        db_new_path = os.path.join(
+            dataset_path, f"meta_db.{self._database_driver}"
+        )
+        if os.path.exists(db_new_path) and not force_overwrite:
+            raise FileExistsError(
+                f"The meta database path '{db_new_path}' already exists. "
+                "Please remove it or set force_overwrite=True to overwrite."
+            )
 
         def generator():
             yield from self._make_packaging_generator(
                 episodes, db_path=db_path
             )
 
-        from datasets.packaged_modules.generator.generator import Generator
+        try:
+            from datasets.packaged_modules.generator.generator import Generator
 
-        builder = Generator(
-            generator=generator, features=self._features, writer_batch_size=2
-        )
-        builder.download_and_prepare(
-            output_dir=dataset_path,
-            max_shard_size=max_shard_size,
-            file_format="arrow",
-        )
+            builder = Generator(
+                generator=generator,
+                features=self._features,
+                writer_batch_size=writer_batch_size,
+                info=dataset_info,
+            )
+            builder.download_and_prepare(
+                output_dir=dataset_path,
+                max_shard_size=max_shard_size,
+                file_format="arrow",
+            )
+            db_new_path = os.path.join(
+                dataset_path, f"meta_db.{self._database_driver}"
+            )
+            os.rename(db_path, db_new_path)
 
-        os.rename(
-            db_path,
-            os.path.join(dataset_path, f"meta_db.{self._database_driver}"),
-        )
+            # Complete the dataset with the arrow cache
+            self._complete_arrow_cache_as_dataset(
+                dataset_path=dataset_path,
+                builder=builder,
+                split=split,
+            )
+        except Exception as e:
+            raise e
 
-        # Complete the dataset with the arrow cache
-        self._complete_arrow_cache_as_dataset(
-            dataset_path=dataset_path,
-            builder=builder,
-            split=split,
-        )
+        finally:
+            # Clean up the temporary database file if it exists
+            if os.path.exists(db_path):
+                os.remove(db_path)
 
 
 @dataclass

@@ -73,6 +73,7 @@ class SplitBatchByTopicArgs(Config):
     min_messages_per_topic: int | None = None
     max_messages_per_topic: int | None = None
     lookahead_duration: int = 0
+    """Lookahead duration in nanoseconds."""
 
     def __post_init__(self):
         if (
@@ -299,8 +300,31 @@ def iter_messages_batch(
         raise ValueError("Batch splitting does not support reverse iteration.")
 
     last_msgs: dict[str, McapMessageTuple] = {}
+    """The last messages for each topic for current timestamp."""
+    prev_last_msgs: dict[str, McapMessageTuple] = {}
+    """The last messages for each topic for previous timestamp."""
+    prev_ts = None
+
+    def fix_last_messages(to_return: McapMessageBatch) -> None:
+        """Fix the last messages in the batch when splitted by current timestamp."""  # noqa: E501
+        # In some case, the last_messages may point to the
+        # future messages. This can happen for the left
+        # part of split.
+        # If this happens, we need to reset the
+        # last_messages to the previous state.
+        max_log_time = to_return.max_log_time
+        if to_return.last_messages is not None:
+            for _, msg in to_return.last_messages.items():
+                if msg.message.log_time > max_log_time:
+                    # if the last message is in the future, we need to
+                    # set it to None
+                    to_return.last_messages = prev_last_msgs.copy()
+                    return
 
     for msg in reader.iter_messages(iter_config=iter_config):
+        if prev_ts != msg.message.log_time:
+            prev_ts = msg.message.log_time
+            prev_last_msgs = last_msgs.copy()
         last_msgs[msg.channel.topic] = msg
         if batch_split.need_split(msg):
             # set the last_batch flat to false and
@@ -326,7 +350,9 @@ def iter_messages_batch(
                     )
                     to_return = cur_batch
                     cur_batch = McapMessageBatch({}, is_last_batch=True)
+
                 assert to_return is not None
+                fix_last_messages(to_return)
                 yield to_return
                 if cur_batch is None:
                     cur_batch = McapMessageBatch({}, is_last_batch=True)

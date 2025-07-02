@@ -123,9 +123,10 @@ class BatchJointsState(_BatchJointsState, ToDataFeatureMixin):
     to encode and decode joint states for dataset storage.
     """
 
+    @classmethod
     def dataset_feature(
-        self, dtype: Literal["float32", "float64"] = "float32"
+        cls, dtype: Literal["float32", "float64"] = "float32"
     ) -> BatchJointsStateFeature:
         ret = BatchJointsStateFeature(dtype=dtype)
-        check_fields_consistency(_BatchJointsState, ret.pa_type)
+        check_fields_consistency(cls, ret.pa_type)
         return ret

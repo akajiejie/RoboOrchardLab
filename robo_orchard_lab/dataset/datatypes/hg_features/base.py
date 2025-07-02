@@ -19,6 +19,7 @@ from abc import ABCMeta, abstractmethod
 from dataclasses import dataclass, field
 from typing import Any
 
+import datasets as hg_datasets
 import pyarrow as pa
 from datasets.features.features import register_feature
 from pydantic import BaseModel
@@ -30,6 +31,7 @@ __all__ = [
     "ToDataFeatureMixin",
     "hg_dataset_feature",
     "check_fields_consistency",
+    "guess_hg_features",
 ]
 
 
@@ -81,8 +83,9 @@ class RODataFeature(metaclass=ABCMeta):
 class ToDataFeatureMixin(metaclass=ABCMeta):
     """Mixin class for features that can be converted to a pyarrow DataType."""
 
+    @classmethod
     @abstractmethod
-    def dataset_feature(self) -> RODataFeature:
+    def dataset_feature(cls) -> RODataFeature:
         raise NotImplementedError(
             "Subclasses must implement dataset_feature method."
         )
@@ -114,3 +117,52 @@ def check_fields_consistency(
             f"pyarrow fields {pa_fields} for {cls.__name__}."
             " This means that the feature is not fully implemented."
         )
+
+
+def guess_hg_features(
+    data: dict,
+) -> hg_datasets.features.Features:
+    """Guess the Hugging Face dataset features from an dict.
+
+    If the object contains a list or tuple, it will try to guess the feature
+    type from the first non-null value. If all values are None or empty,
+    it raises a ValueError.
+
+    Try to avoid any None values in the input object, as it may lead to
+    incorrect feature type inference.
+
+    """
+
+    if not isinstance(data, dict):
+        raise TypeError(
+            "Input data must be a dictionary mapping field names to values."
+        )
+
+    def guess_feature(obj: Any):
+        if isinstance(obj, (hg_datasets.Features, RODataFeature)):
+            return obj
+        elif isinstance(obj, dict):
+            return {k: guess_feature(v) for k, v in obj.items()}
+        elif isinstance(obj, (list, tuple)):
+            idx, value = hg_datasets.features.features.first_non_null_value(
+                obj
+            )
+            if idx < 0:
+                raise ValueError(
+                    "Cannot guess features from a list or tuple with all "
+                    "None values or empty."
+                )
+            return hg_datasets.Sequence(feature=guess_feature(value))
+        elif isinstance(obj, ToDataFeatureMixin):
+            return obj.dataset_feature()
+        else:
+            return hg_datasets.features.features.generate_from_arrow_type(
+                pa.array([obj]).type
+            )
+
+    feature_dict = guess_feature(data)
+    assert isinstance(feature_dict, dict), (
+        "The guessed features must be a dictionary mapping field names to "
+        "Hugging Face dataset features."
+    )
+    return hg_datasets.Features(**(feature_dict))

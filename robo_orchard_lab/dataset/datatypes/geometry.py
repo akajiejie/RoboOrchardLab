@@ -110,12 +110,13 @@ class BatchTransform3DFeature(RODataFeature, FeatureDecodeMixin):
 
 
 class BatchTransform3D(_BatchTransform3D, ToDataFeatureMixin):
+    @classmethod
     def dataset_feature(
-        self, dtype: Literal["float32", "float64"] = "float32"
+        cls, dtype: Literal["float32", "float64"] = "float32"
     ) -> BatchTransform3DFeature:
         ret = BatchTransform3DFeature(dtype=dtype)
 
-        check_fields_consistency(type(self), ret.pa_type)
+        check_fields_consistency(cls, ret.pa_type)
 
         return ret
 
@@ -156,11 +157,12 @@ class BatchPoseFeature(BatchTransform3DFeature):
 
 
 class BatchPose(_BatchPose, ToDataFeatureMixin):
+    @classmethod
     def dataset_feature(
-        self, dtype: Literal["float32", "float64"] = "float32"
+        cls, dtype: Literal["float32", "float64"] = "float32"
     ) -> BatchPoseFeature:
         ret = BatchPoseFeature(dtype=dtype)
-        check_fields_consistency(type(self), ret.pa_type)
+        check_fields_consistency(cls, ret.pa_type)
         return ret
 
 
@@ -210,9 +212,10 @@ class BatchFrameTransformFeature(BatchTransform3DFeature):
 
 
 class BatchFrameTransform(_BatchFrameTransform, ToDataFeatureMixin):
+    @classmethod
     def dataset_feature(
-        self, dtype: Literal["float32", "float64"] = "float32"
+        cls, dtype: Literal["float32", "float64"] = "float32"
     ) -> BatchFrameTransformFeature:
         ret = BatchFrameTransformFeature(dtype=dtype)
-        check_fields_consistency(type(self), ret.pa_type)
+        check_fields_consistency(cls, ret.pa_type)
         return ret
