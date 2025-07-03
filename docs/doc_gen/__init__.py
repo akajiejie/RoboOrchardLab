@@ -14,6 +14,5 @@
 # implied. See the License for the specific language governing
 # permissions and limitations under the License.
 
-from .autoapi_patch import patch_autoapi
-from .autodoc_ext import autodoc_process_docstring_event
+from .autoapi_ext import patch_autoapi
 from .index import *

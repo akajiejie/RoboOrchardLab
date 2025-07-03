@@ -13,9 +13,46 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
 # implied. See the License for the specific language governing
 # permissions and limitations under the License.
+import ast
+import importlib.util
 
 import autoapi._mapper
 from autoapi._mapper import LOGGER, operator
+
+IGNORE_PARENT_PACKAGES = ["transformers."]
+
+
+def autodoc_process_docstring_event(app, what, name, obj, options, lines):
+    if what != "class":
+        return
+
+    for base_class in obj.bases:
+        if any((base_class.startswith(pkg) for pkg in IGNORE_PARENT_PACKAGES)):
+            module_name, class_name = obj.obj["full_name"].rsplit(".", 1)
+
+            spec = importlib.util.find_spec(module_name)
+            if not spec or not spec.origin:
+                print(f"Could not find source file for module: {module_name}")
+                return
+
+            file_path = spec.origin
+            with open(file_path, "r", encoding="utf-8") as f:
+                source_code = f.read()
+            parsed_ast = ast.parse(source_code, filename=file_path)
+
+            class_def_node = None
+            for node in parsed_ast.body:
+                if isinstance(node, ast.ClassDef) and node.name == class_name:
+                    class_def_node = node
+                    break
+            if not class_def_node:
+                print(f"Could not find class '{class_name}' in '{file_path}'")
+                return
+
+            if ast.get_docstring(class_def_node) is None:
+                # If the class inherits from an ignored package AND has no
+                # docstring of its own, clear the lines to prevent inheriting.
+                lines.clear()
 
 
 def _patched_create_class(self, data, options=None):
@@ -71,5 +108,6 @@ def _patched_create_class(self, data, options=None):
         yield obj
 
 
-def patch_autoapi():
+def patch_autoapi(app):
     autoapi._mapper.Mapper.create_class = _patched_create_class
+    app.connect("autodoc-process-docstring", autodoc_process_docstring_event)

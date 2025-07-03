@@ -29,7 +29,7 @@ sys.path.insert(0, os.path.join(os.path.abspath(os.path.dirname(__file__))))
 import re
 from collections import OrderedDict
 
-from doc_gen import autodoc_process_docstring_event, gen_index, patch_autoapi
+from doc_gen import gen_index, patch_autoapi  # type: ignore
 from pydantic import BaseModel
 from recommonmark.parser import CommonMarkParser
 from recommonmark.transform import AutoStructify
@@ -154,8 +154,10 @@ if with_comment:
     extensions.append("sphinx_comments")
 
 gallery_dict = OrderedDict()
-gallery_dict["trainer_tutorial"] = [{"path": "trainer_tutorial/"}]
-gallery_dict["model_api_tutorial"] = [{"path": "model_api_tutorial/"}]
+# accelerate building docs
+if os.environ.get("ROBO_ORCHARD_LAB_NO_TUTORIALS", "0") == "1":
+    gallery_dict["trainer_tutorial"] = [{"path": "trainer_tutorial/"}]
+    gallery_dict["model_api_tutorial"] = [{"path": "model_api_tutorial/"}]
 
 build_gallery_dict = OrderedDict()
 examples_dirs = []
@@ -449,8 +451,7 @@ def setup(app):
     patch_autodoc(app)
     autoapi_skip_member(app)
     # patch autoapi to support customize docstring
-    patch_autoapi()
-    app.connect("autodoc-process-docstring", autodoc_process_docstring_event)
+    patch_autoapi(app)
 
     gen_index(
         jinja_template_path="index.jinja", gallery_dirs_dict=build_gallery_dict
