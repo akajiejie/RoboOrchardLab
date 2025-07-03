@@ -42,7 +42,7 @@ with_comment = os.environ.get("DOC_WITH_COMMENT", "0") == "1"
 # -- Project information -----------------------------------------------------
 
 project = "RoboOrchard Lab"
-copyright = "2024, Horizon Robotics Developers"
+copyright = "2024-2025, Horizon Robotics Developers"
 author = "Horizon Robotics Developers"
 
 # # The short X.Y version
@@ -253,9 +253,9 @@ html_sidebars = {
         "sidebar/variant-selector.html",
     ],
 }
-# html_css_files = [
-#     'version_switcher.css', # 可选
-# ]
+html_css_files = [
+    "css/version_switcher.css",
+]
 
 # The suffix(es) of source filenames.
 # You can specify multiple suffix as a list of string:
@@ -300,8 +300,8 @@ html_theme_options = {
     # "top_of_page_button": "edit",
     # "source_branch": "master",
     # "source_directory": "docs/",
-    "light_logo": "logo/logo.png",
-    "dark_logo": "logo/logo.png",
+    "light_logo": "logo/logo_light.png",
+    "dark_logo": "logo/logo_dark.png",
     "footer_icons": [
         {
             "name": "GitHub",
