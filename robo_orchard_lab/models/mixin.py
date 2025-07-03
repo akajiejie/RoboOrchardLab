@@ -14,8 +14,10 @@
 # implied. See the License for the specific language governing
 # permissions and limitations under the License.
 
+import json
+import logging
 import os
-from typing import TypeVar
+from typing import Any, TypeVar
 
 import torch
 from robo_orchard_core.utils.config import (
@@ -32,6 +34,8 @@ from robo_orchard_lab.utils.path import (
     in_cwd,
     is_empty_directory,
 )
+
+logger = logging.getLogger(__name__)
 
 TorchNNModuleTypeCo = TypeVar(
     "TorchNNModuleTypeCo", bound=torch.nn.Module, covariant=True
@@ -51,6 +55,24 @@ class TorchModuleCfg(ClassConfig[TorchNNModuleTypeCo]):
 TorchModuleCfgType_co = TypeVar(
     "TorchModuleCfgType_co", bound=TorchModuleCfg, covariant=True
 )
+
+
+def _set_nested_attr(obj: Any, names: list[str], value: Any):
+    """Sets a nested attribute on an object.
+
+    Args:
+        obj: The target object.
+        names: A list of attribute names representing the path.
+        value: The value to set on the final attribute.
+
+    Example:
+        >>> _set_nested_attr(model, "encoder.layer.weight".split("."), tensor)
+        equivalent to `model.encoder.layer.weight = tensor`.
+
+    """
+    for name in names[:-1]:
+        obj = getattr(obj, name)
+    setattr(obj, names[-1], value)
 
 
 class ModelMixin(torch.nn.Module, ClassInitFromConfigMixin):
@@ -107,21 +129,35 @@ class ModelMixin(torch.nn.Module, ClassInitFromConfigMixin):
                 with open(os.path.join(output_dir, filename), "w") as f:
                     f.write(model_i.cfg.model_dump_json(indent=4))
 
-    def save_model(self, directory: str, model_prefix: str = "model"):
-        """Saves the model's configuration and weights to the specified directory.
+    def save_model(
+        self,
+        directory: str,
+        model_prefix: str = "model",
+        allow_shared_tensor: bool = False,
+    ):
+        """Saves the model's config and weights to a directory.
 
-        The configuration is saved as `model.config.json` and the model weights
-        (state dictionary) are saved as `model.safetensors`.
+        This method saves the model's configuration to `{model_prefix}.config.json`
+        and its weights to `{model_prefix}.safetensors`.
 
-        The target directory will be created if it does not exist.
+        If `allow_shared_tensor` is True, it handles models with tied weights by:
+
+        1.  Saving only a single copy of each shared tensor to the `.safetensors` file.
+
+        2.  Creating a `{model_prefix}.shared_keys.json` file that maps the
+        duplicate parameter names to their original counterparts. This allows for
+        perfect model restoration with `strict=True` loading.
 
         Args:
-            directory (str): The path to the directory where the model files will be saved.
+            directory: The path to the directory for saving the model.
+            model_prefix: The file prefix for the config and weights files.
+            allow_shared_tensor: If True, enables the logic to handle
+                tied weights by saving a de-duplicated state dict and a
+                key-sharing map.
 
         Raises:
-            DirectoryNotEmptyError: If the specified directory is not empty.
-            IOError: If there is an error writing the configuration or weights files.
-            AttributeError: If `self.cfg` is not properly configured for dumping.
+            DirectoryNotEmptyError: If the target directory already exists and
+                is not empty.
         """  # noqa: E501
 
         os.makedirs(directory, exist_ok=True)
@@ -135,6 +171,29 @@ class ModelMixin(torch.nn.Module, ClassInitFromConfigMixin):
             f.write(self.cfg.model_dump_json(indent=4))
 
         model_state_dict = self.state_dict()
+
+        if allow_shared_tensor:
+            data_ptr_to_key = dict()
+            shared_keys_map = dict()
+            unique_model_state_dict = dict()
+
+            for key, tensor in model_state_dict.items():
+                data_ptr = tensor.data_ptr()
+                if data_ptr not in data_ptr_to_key:
+                    data_ptr_to_key[data_ptr] = key
+                    unique_model_state_dict[key] = tensor
+                else:
+                    original_key = data_ptr_to_key[data_ptr]
+                    shared_keys_map[key] = original_key
+
+            model_state_dict = unique_model_state_dict
+
+            shared_keys_map_path = os.path.join(
+                directory, f"{model_prefix}.shared_keys.json"
+            )
+            with open(shared_keys_map_path, "w") as fp:
+                json.dump(shared_keys_map, fp)
+
         save_file(model_state_dict, weights_path)
 
     @staticmethod
@@ -192,14 +251,15 @@ class ModelMixin(torch.nn.Module, ClassInitFromConfigMixin):
                 "model.config.json" and "model.safetensors". Defaults to "model".
 
         Returns:
-            An instance of the model (typed as "ModelMixin" or a subclass),
-            initialized from the configuration and optionally with weights loaded.
+            torch.nn.Module: An instance of the model (typed as "ModelMixin" or a subclass),
+                initialized from the configuration and optionally with weights loaded.
 
         Raises:
             FileNotFoundError: If the specified `directory` does not exist,
                 or if the configuration file (`{model_prefix}.config.json`)
                 or the state dictionary file (`{model_prefix}.safetensors}`,
                 when `load_model` is True) is not found in the directory.
+            ValueError: If the Hugging Face Hub URI is invalid.
         """  # noqa: E501
 
         if directory.startswith("hf://"):
@@ -253,6 +313,37 @@ class ModelMixin(torch.nn.Module, ClassInitFromConfigMixin):
 
         state_dict = load_file(ckpt_path, device=device)
 
-        model.load_state_dict(state_dict, strict=strict)
+        shared_keys_map_path = os.path.join(
+            directory, f"{model_prefix}.shared_keys.json"
+        )
+
+        if os.path.exists(shared_keys_map_path):
+            with open(shared_keys_map_path, "r") as fp:
+                shared_keys_map = json.load(fp)
+
+            # Step 1: Reconstruct the state_dict in memory.
+            # This adds the duplicate keys back into the state_dict, ensuring
+            # it perfectly matches the model's expected keys for `strict=True` loading.  # noqa: E501
+            for duplicate_key, original_key in shared_keys_map.items():
+                if original_key in state_dict:
+                    state_dict[duplicate_key] = state_dict[original_key]
+
+            model.load_state_dict(state_dict, strict=strict)
+
+            # Step 2: Re-establish the actual memory sharing on the model object.  # noqa: E501
+            # This ensures `tensor_a is tensor_b` holds true after loading.
+            for duplicate_key, original_key in shared_keys_map.items():
+                # Find the original tensor object on the model
+                original_tensor = model
+                for part in original_key.split("."):
+                    original_tensor = getattr(original_tensor, part)
+
+                # Point the duplicate parameter to the original tensor object
+                _set_nested_attr(
+                    model, duplicate_key.split("."), original_tensor
+                )
+
+        else:
+            model.load_state_dict(state_dict, strict=strict)
 
         return model
