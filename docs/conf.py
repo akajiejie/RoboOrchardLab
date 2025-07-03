@@ -155,7 +155,7 @@ if with_comment:
 
 gallery_dict = OrderedDict()
 # accelerate building docs
-if os.environ.get("ROBO_ORCHARD_LAB_NO_TUTORIALS", "0") == "1":
+if os.environ.get("ROBO_ORCHARD_LAB_NO_TUTORIALS", "0") != "1":
     gallery_dict["trainer_tutorial"] = [{"path": "trainer_tutorial/"}]
     gallery_dict["model_api_tutorial"] = [{"path": "model_api_tutorial/"}]
 
