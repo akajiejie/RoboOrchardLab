@@ -240,8 +240,11 @@ class DatasetPackaging:
             except Exception as e:
                 warnings.warn(
                     f"Failed to generate frames for {episode}. "
-                    f"Skipping this episode. Error: {e}"
+                    f"Skipping this episode. Error: "
                 )
+                import traceback
+
+                traceback.print_exception(e)
                 return
 
         for episode in episodes:
@@ -250,8 +253,12 @@ class DatasetPackaging:
             except Exception as e:
                 warnings.warn(
                     f"Failed to generate episode metadata for {episode}. "
-                    f"Skipping this episode. Error: {e}"
+                    f"Skipping this episode.  Error: "
                 )
+                import traceback
+
+                traceback.print_exception(e)
+                continue
 
             with Session(engine) as session:
                 episode_meta_orm = episode_meta.get_transient_orm(
