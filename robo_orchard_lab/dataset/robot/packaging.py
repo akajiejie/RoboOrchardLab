@@ -31,6 +31,10 @@ from sqlalchemy import URL
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session, make_transient
 
+from robo_orchard_lab.dataset.robot.columns import (
+    PreservedIndexColumns,
+    PreservedIndexColumnsKeys,
+)
 from robo_orchard_lab.dataset.robot.db_orm import (
     DatasetORMBase,
     Episode,
@@ -134,24 +138,12 @@ class DatasetPackaging:
 
     """
 
-    preserved_index_keys = (
-        "index",
-        "episode_index",
-        "frame_index",
-        "timestamp_min",  # The minimum timestamp of the frame in nanoseconds
-        "timestamp_max",  # The maximum timestamp of the frame in nanoseconds
-        "task_index",
-        "robot_index",
-        "instruction_index",
-    )
-
     def __init__(
         self,
         features: hg_datasets.Features,
         database_driver: str = "duckdb",
     ):
         self._features = self._check_and_update_features(features)
-        # self._meta_db_engine: Engine | None = None
         self._database_driver = database_driver
         self._index_state: DatasetIndexState = DatasetIndexState()
         self._instruction_cache: InstructionCache = InstructionCache()
@@ -163,7 +155,7 @@ class DatasetPackaging:
     def _check_and_update_features(
         self, features: hg_datasets.Features
     ) -> hg_datasets.Features:
-        index_keys = self.preserved_index_keys
+        index_keys = PreservedIndexColumnsKeys
         for key in index_keys:
             if key in features:
                 raise ValueError(
@@ -186,31 +178,27 @@ class DatasetPackaging:
     ):
         """Extend the frame with index fields."""
         features = frame.features
-        for key in self.preserved_index_keys:
+        for key in PreservedIndexColumnsKeys:
             if key in features:
                 raise ValueError(
                     f"key '{key}' is reserved for internal use "
                     "and cannot be used in the frame features."
                 )
 
-        features.update(
-            {
-                "index": self._index_state.last_frame_idx + 1,
-                "frame_index": self._index_state.last_episode_frame_idx + 1,
-                "episode_index": episode_meta.episode.index,
-                "robot_index": episode_meta.robot.index
-                if episode_meta.robot
-                else None,
-                "task_index": episode_meta.task.index
-                if episode_meta.task
-                else None,
-                "instruction_index": instruction.index
-                if instruction
-                else None,
-                "timestamp_min": frame.timestamp_ns_min,
-                "timestamp_max": frame.timestamp_ns_max,
-            }
+        index_columns = PreservedIndexColumns(
+            index=self._index_state.last_frame_idx + 1,
+            frame_index=self._index_state.last_episode_frame_idx + 1,
+            episode_index=episode_meta.episode.index,
+            robot_index=episode_meta.robot.index
+            if episode_meta.robot
+            else None,
+            task_index=episode_meta.task.index if episode_meta.task else None,
+            instruction_index=instruction.index if instruction else None,
+            timestamp_min=frame.timestamp_ns_min,
+            timestamp_max=frame.timestamp_ns_max,
         )
+
+        features.update(index_columns.__dict__)
 
     def _add_instruction(
         self, instruction_data: InstructionData, engine: Engine

@@ -16,7 +16,6 @@
 
 from __future__ import annotations
 from abc import ABCMeta, abstractmethod
-from dataclasses import dataclass
 from typing import Any, Generic, Mapping
 
 from robo_orchard_core.datatypes.adaptor import (
@@ -27,24 +26,13 @@ from typing_extensions import TypeVar
 
 from robo_orchard_lab.dataset.experimental.mcap.messages import (
     McapMessagesTuple,
+    StampedMessage,
 )
 from robo_orchard_lab.dataset.experimental.mcap.msg_encoder import (
     McapEncoderContext,
 )
 
 T = TypeVar("T", bound=Any)  # The type before decoder
-
-
-@dataclass
-class StampedMessage(Generic[T]):
-    """A message with timestamp and topic name."""
-
-    data: T
-    """The actual message data."""
-    log_time: int
-    """The log time in nanoseconds."""
-    pub_time: int
-    """The publish time in nanoseconds."""
 
 
 class McapBatchEncoder(
@@ -74,12 +62,17 @@ class McapBatchEncoder(
     def __call__(
         self, src: T, msg_encoder_ctx: McapEncoderContext
     ) -> dict[str, McapMessagesTuple]:
-        """Encode the source data to a batch of messages.
+        """Encode the source data to a batch of encoded mcap messages.
 
         Args:
             src (T): The source data to encode.
             msg_encoder_ctx (McapEncoderContext): The encoder context to use
                 for encoding the messages.
+
+        Returns:
+            dict[str, McapMessagesTuple]: The encoded messages. It is a
+                dictionary mapping from topic name to a tuple of schema,
+                channel, and list of encoded messages.
 
         """
         formated_batch = self.format_batch(src)

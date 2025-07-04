@@ -24,6 +24,10 @@ from sqlalchemy import URL, Engine
 from sqlalchemy.orm import Session, make_transient
 
 from robo_orchard_lab.dataset.datatypes import *
+from robo_orchard_lab.dataset.robot.columns import (
+    PreservedIndexColumnsKeys,
+    # PreservedIndexColumns,
+)
 from robo_orchard_lab.dataset.robot.db_orm import (
     Episode,
     Instruction,
@@ -44,6 +48,13 @@ class RODataset:
     datasets (pyarrow_dataset) is used as table format, and SQLAlchemy with
     DuckDB are used to manage the database.
 
+    Args:
+        dataset_path (str): The path to the dataset directory.
+            It should contain a `dataset.arrow` file and a `meta_db.*` file.
+        storage_options (dict | None, optional): Additional Key/value pairs to
+            be passed on to the file-system backend, if any. This is passed
+            to the `datasets.Dataset.load_from_disk` method. Defaults to None.
+
     """
 
     frame_dataset: Dataset
@@ -51,9 +62,15 @@ class RODataset:
     db_engine: Engine
     """The SQLAlchemy engine for the meta database"""
 
+    index_dataset: Dataset
+    """The same as `frame_dataset`, but only contains the preserved index columns."""  # noqa: E501
+
     def __init__(self, dataset_path: str, storage_options: dict | None = None):
         self.frame_dataset = Dataset.load_from_disk(
             dataset_path, storage_options=storage_options
+        )
+        self.index_dataset = self.frame_dataset.select_columns(
+            column_names=list(PreservedIndexColumnsKeys)
         )
         # recover state dict
         from datasets import config as hg_datasets_config

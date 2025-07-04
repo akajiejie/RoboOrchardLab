@@ -185,7 +185,7 @@ if __name__ == "__main__":
             "mcap>=1.2.2",
             "foxglove-schemas-protobuf>=0.3.0",
             "opencv-python",
-            "robo_orchard_schemas@git+https://github.com/HorizonRobotics/robo_orchard_schemas.git@4a2920a718a8395aeb3b5e8e16c5c924ff6e0f07",
+            "robo_orchard_schemas@git+https://github.com/HorizonRobotics/robo_orchard_schemas.git@9c8055a121c049ed94a7b48095c1bae6a0d0f60d",
         ],
         "all": ["robo_orchard_lab[bip3d,sem,mcap_datasets]"],
     }

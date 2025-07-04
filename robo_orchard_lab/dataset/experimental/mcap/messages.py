@@ -20,9 +20,11 @@ from dataclasses import dataclass
 from typing import (
     TYPE_CHECKING,
     Any,
+    Generic,
     Iterator,
     Literal,
     Optional,
+    TypeVar,
 )
 
 from mcap.records import (
@@ -38,10 +40,26 @@ if TYPE_CHECKING:
 
 
 __all__ = [
+    "StampedMessage",
     "McapMessageTuple",
     "McapDecodedMessageTuple",
     "McapMessagesTuple",
 ]
+
+
+T = TypeVar("T", bound=Any)
+
+
+@dataclass
+class StampedMessage(Generic[T]):
+    """Any message with timestamp."""
+
+    data: T
+    """The actual message data."""
+    log_time: int | None
+    """The log time in nanoseconds."""
+    pub_time: int | None
+    """The publish time in nanoseconds."""
 
 
 @dataclass

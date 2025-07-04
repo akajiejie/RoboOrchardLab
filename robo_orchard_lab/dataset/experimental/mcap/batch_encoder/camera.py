@@ -50,8 +50,9 @@ __all__ = [
 def format_batch_camera_info(
     data: BatchCameraInfo,
     timestamps: list[int],
-    calib_topic: str,
-    tf_topic: str,
+    calib_topic: str | None,
+    tf_topic: str | None,
+    default_focal: float = 500.0,
 ) -> dict[str, list[StampedMessage[Any]]]:
     """Format BatchCameraInfo into a dictionary of StampedMessages."""
     ret: dict[str, list[StampedMessage[Any]]] = {}
@@ -79,32 +80,55 @@ def format_batch_camera_info(
             "The batch size of intrinsic matrices must match the "
             "batch size of timestamps. "
         )
-        k_batch = (
-            data.intrinsic_matrices.reshape(-1, 9).numpy(force=True)
-            if data.intrinsic_matrices is not None
-            else np.eye(3).reshape(-1, 9).repeat(len(timestamps), axis=0)
-        )
+        # k_batch = (
+        #     data.intrinsic_matrices.reshape(-1, 9).numpy(force=True)
+        #     if data.intrinsic_matrices is not None
+        #     else np.eye(3).reshape(-1, 9).repeat(len(timestamps), axis=0)
+        # )
 
-        ret[calib_topic] = []
-        for i in range(len(timestamps)):
-            calibration = FgCameraCalibration(
-                timestamp=from_nanoseconds(timestamps[i]),
-                frame_id=data.frame_id,
-                width=data.image_shape[1],
-                height=data.image_shape[0],
-                K=k_batch[i],
-                distortion_model=distortion_model,
-                D=distortion_coef,
+        if calib_topic is not None:
+            k_batch = (
+                data.intrinsic_matrices.reshape(-1, 9).numpy(force=True)
+                if data.intrinsic_matrices is not None
+                else None
             )
+            if k_batch is None:
+                k_batch = (
+                    np.array(
+                        [
+                            [default_focal, 0, data.image_shape[1] / 2],
+                            [0, default_focal, data.image_shape[0] / 2],
+                            [0, 0, 1],
+                        ]
+                    )
+                    .reshape(-1, 9)
+                    .repeat(len(timestamps), axis=0)
+                )
+            p_batch = np.zeros(shape=(len(timestamps), 3, 4))
+            p_batch[:, :3, :3] = k_batch[:, :9].reshape(-1, 3, 3)
+            p_batch = p_batch.reshape(-1, 12)
 
-            stamped_msg = StampedMessage(
-                data=calibration,
-                log_time=timestamps[i],
-                pub_time=timestamps[i],
-            )
-            ret[calib_topic].append(stamped_msg)
+            ret[calib_topic] = []
+            for i in range(len(timestamps)):
+                calibration = FgCameraCalibration(
+                    timestamp=from_nanoseconds(timestamps[i]),
+                    frame_id=data.frame_id,
+                    width=data.image_shape[1],
+                    height=data.image_shape[0],
+                    K=k_batch[i],
+                    P=p_batch[i],
+                    distortion_model=distortion_model,
+                    D=distortion_coef,
+                )
 
-    if data.pose is not None:
+                stamped_msg = StampedMessage(
+                    data=calibration,
+                    log_time=timestamps[i],
+                    pub_time=timestamps[i],
+                )
+                ret[calib_topic].append(stamped_msg)
+
+    if data.pose is not None and tf_topic is not None:
         encoder = McapBatchFromBatchFrameTransformConfig(
             target_topic=tf_topic,
         )()
@@ -158,8 +182,10 @@ class McapBatchFromBatchCameraDataEncoded(
 
 
 class McapBatchFromCameraInfoMixin(Config):
-    calib_topic: str
-    tf_topic: str
+    calib_topic: str | None = None
+    """Topic for camera calibration messages."""
+    tf_topic: str | None = None
+    """Topic for camera frame transform messages."""
 
 
 class McapBatchFromBatchCameraDataEncodedConfig(
@@ -172,3 +198,4 @@ class McapBatchFromBatchCameraDataEncodedConfig(
         McapBatchFromBatchCameraDataEncoded
     )
     image_topic: str
+    """Topic for camera image messages."""
