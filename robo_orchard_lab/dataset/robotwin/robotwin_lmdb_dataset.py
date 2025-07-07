@@ -110,6 +110,7 @@ class RoboTwinLmdbDataset(BaseLmdbManipulationDataset):
         T_base2ego=None,  # noqa: N803
         default_space="base",
         instructions=None,
+        instruction_keys=("seen", "unseen"),
     ):
         super().__init__(
             paths=paths,
@@ -139,6 +140,7 @@ class RoboTwinLmdbDataset(BaseLmdbManipulationDataset):
         assert default_space in ["base", "world", "ego"]
         self.default_space = default_space
         self.load_instructions(instructions)
+        self.instruction_keys = instruction_keys
 
     def load_instructions(self, instructions):
         if instructions is None:
@@ -175,12 +177,14 @@ class RoboTwinLmdbDataset(BaseLmdbManipulationDataset):
         intrinsic = []
         for cam_name in cam_names:
             if self.load_image:
-                image = cv2.imdecode(
-                    self.img_lmdbs[lmdb_index][
-                        f"{uuid}/{cam_name}/{step_index}"
-                    ],
-                    cv2.IMREAD_UNCHANGED,
-                )
+                image = self.img_lmdbs[lmdb_index][
+                    f"{uuid}/{cam_name}/{step_index}"
+                ]
+                if isinstance(image, bytes):
+                    image = np.ndarray(
+                        shape=(1, len(image)), dtype=np.uint8, buffer=image
+                    )
+                image = cv2.imdecode(image, cv2.IMREAD_UNCHANGED)
                 images.append(image)
             if self.load_depth:
                 depth = (
@@ -232,10 +236,21 @@ class RoboTwinLmdbDataset(BaseLmdbManipulationDataset):
         if self.load_depth:
             data["depths"] = depths
 
-        instructions = self.instructions.get(
-            task_name,
-            self.DEFAULT_INSTRUCTIONS["others"],
-        )
+        instructions = self.meta_lmdbs[lmdb_index][f"{uuid}/instructions"]
+        if instructions is None or self.instruction_keys is None:
+            instructions = self.instructions.get(
+                task_name,
+                self.DEFAULT_INSTRUCTIONS["others"],
+            )
+        elif isinstance(instructions, dict):
+            _tmp = []
+            for k in self.instruction_keys:
+                if isinstance(instructions[k], str):
+                    _tmp.append(instructions[k])
+                else:
+                    _tmp.extend(instructions[k])
+            instructions = _tmp
+
         if isinstance(instructions, str):
             text = instructions
         elif len(instructions) == 0:

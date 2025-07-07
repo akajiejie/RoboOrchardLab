@@ -30,13 +30,15 @@ config = dict(
     save_step_freq=4000,
     num_workers=8,
     lr=1e-4,
-    task_names=["blocks_stack_three"],
     checkpoint="./ckpt/groundingdino_swint_ogc_mmdet-822d7e9d-rename.pth",
     bert_checkpoint="./ckpt/bert-base-uncased",
     data_path="./data/lmdb",
     urdf="./urdf/arx5/arx5_description_isaac.urdf",
     multi_task=False,
+    # task_names=["blocks_stack_three"],
     scale_shift_version="single_task_blocks_stack_three",
+    task_names=["place_empty_cup"],
+    # scale_shift_version="default",
 )
 
 
@@ -441,7 +443,7 @@ def build_transforms(config):
         )
     )
 
-    if config["scale_shift_version"] == "main":
+    if config["scale_shift_version"] == "default":
         scale_shift_list = [
             [1.12735104, -0.11648428],
             [1.45046443, 1.35436516],
@@ -558,6 +560,7 @@ def build_dataset(config, lazy_init=False):
         task_names=config["task_names"],
         lazy_init=True,
         transforms=val_transforms,
+        instruction_keys=("seen",),
     )
     return train_dataset, val_dataset
 

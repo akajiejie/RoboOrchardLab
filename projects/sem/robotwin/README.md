@@ -85,13 +85,19 @@ Then, use the following command to package the data into LMDB format for trainin
 ```bash
 cd path/to/robo_orchard_lab
 
+# for robotwin2.0 master branch 
 python robo_orchard_lab/dataset/robotwin/robotwin_packer.py \
     --input_path path/to/robotwin_data \
-    --output_path "prjects/sem_robotwin/data/lmdb" \
+    --output_path "projects/sem_robotwin/data/lmdb" \
+    --task_names ${task_names} \
+    --config_name demo_clean \
+
+# for CVPR-Challenge-2025-Round2 branch
+python robo_orchard_lab/dataset/robotwin/robotwin_packer.py \
+    --input_path path/to/robotwin_data \
+    --output_path "projects/sem_robotwin/data/lmdb" \
     --task_names ${task_names} \
     --embodiment aloha-agilex-1 \
-    --robotwin_aug m1_b1_l1_h0.03_c0 \
-    --camera_name D435
 ```
 
 Make sure the resulting data path is as follows:
@@ -129,7 +135,7 @@ accelerate launch  \
     --workspace /job_data \
     --config ${CONFIG}
 
-# eval with single-gpu
+# eval with single-gpu (for CVPR-Challenge-2025-Round2 branch)
 eval_tasks="blocks_stack_three"
 python3 robotwin_eval.py \
     --config config_sem_robotwin.py \
@@ -138,6 +144,9 @@ python3 robotwin_eval.py \
     --checkpoint path/to/checkpoint \
     --robotwin_dir path/to/robotwin_repo \
     --num_test 3
+
+# eval with single-gpu (for Robotwin2.0 master branch)
+# following instruction in ./sem_policy/README.md
 ```
 
 

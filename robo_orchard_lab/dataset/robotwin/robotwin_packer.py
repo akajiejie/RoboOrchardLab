@@ -14,6 +14,7 @@
 # implied. See the License for the specific language governing
 # permissions and limitations under the License.
 
+import json
 import logging
 import os
 
@@ -47,7 +48,7 @@ class RobotwinDataPacker(BaseLmdbManipulationDataPacker):
         embodiment=None,
         robotwin_aug=None,
         camera_name=None,
-        setting=None,
+        config_name=None,
         simulation=True,
         **kwargs,
     ):
@@ -56,43 +57,76 @@ class RobotwinDataPacker(BaseLmdbManipulationDataPacker):
         self.embodiment = embodiment
         self.robotwin_aug = robotwin_aug
         self.camera_name = camera_name
+        if (
+            (self.embodiment is not None)
+            or (self.robotwin_aug is not None)
+            or (self.camera_name is not None)
+        ):
+            logger.warning(
+                "The embodiment/robotwin_aug/camera_name supports the "
+                "robotwin_cvpr_round2 branch but is deprecated and will be "
+                "removed in a future version. "
+                "Please use config_name instead."
+            )
+        self.config_name = config_name
         self.simulation = simulation
         self.episodes = self.input_path_handler(self.input_path)
 
-    def _check_valid(self, input_path, task_dir):
-        if not os.path.isdir(os.path.join(input_path, task_dir)):
-            return None, None, None, None
+    def _check_valid(self, input_path, task_dir, config_dir):
+        if self.task_names is not None and task_dir not in self.task_names:
+            return None
 
-        if task_dir not in self.task_names:
-            return None, None, None, None
+        if (
+            (self.embodiment is not None)
+            or (self.robotwin_aug is not None)
+            or (self.camera_name is not None)
+        ):
+            config_name = (
+                f"{self.embodiment}-{self.robotwin_aug}_{self.camera_name}"
+            )
+        else:
+            config_name = self.config_name
 
-        setting = f"{self.embodiment}-{self.robotwin_aug}_{self.camera_name}"
+        if config_name is None:
+            config_name = config_dir
+        elif config_dir != config_name:
+            return None
+
         task_name = task_dir
+
         valid_seed_file = os.path.join(
-            input_path, task_name, setting, "seed.txt"
+            input_path, task_name, config_name, "seed.txt"
         )
-        return self.camera_name, task_name, valid_seed_file, setting
+        if not os.path.isfile(valid_seed_file):
+            return None
+
+        return task_name, config_name, valid_seed_file
 
     def input_path_handler(self, input_path):
         episodes = []
         for task_dir in os.listdir(input_path):
-            camera_name, task_name, valid_seed_file, setting = (
-                self._check_valid(input_path, task_dir)
-            )
-            if valid_seed_file is None:
-                logger.warning(f"invalid task dir: {task_dir}")
-                continue
-
-            seeds = open(valid_seed_file, "r").read().strip().split(" ")
-            current_path = os.path.join(input_path, task_dir, setting)
-
-            for ep in os.listdir(current_path):
-                if not ep.endswith(".hdf5"):
+            for config_dir in os.listdir(os.path.join(input_path, task_dir)):
+                valid = self._check_valid(input_path, task_dir, config_dir)
+                if not valid:
+                    logger.warning(
+                        f"invalid task/config dir: {task_dir}/{config_dir}"
+                    )
                     continue
-                ep_path = os.path.join(current_path, ep)
-                ep_id = int(ep.replace("episode", "").replace(".hdf5", ""))
-                seed = seeds[ep_id]
-                episodes.append([task_name, camera_name, ep_path, seed])
+                task_name, config_name, valid_seed_file = valid
+
+                seeds = open(valid_seed_file, "r").read().strip().split(" ")
+                current_path = os.path.join(input_path, task_dir, config_name)
+
+                if os.path.isdir(os.path.join(current_path, "data")):
+                    current_path = os.path.join(current_path, "data")
+
+                for ep in os.listdir(current_path):
+                    if not ep.endswith(".hdf5"):
+                        continue
+                    ep_path = os.path.join(current_path, ep)
+                    ep_id = int(ep.replace("episode", "").replace(".hdf5", ""))
+                    seed = seeds[ep_id]
+                    episodes.append([task_name, config_name, ep_path, seed])
         episodes.sort(key=lambda x: (x[0], x[1], int(x[3])))  # sort by seed
         logger.info(f"number of valid episodes: {len(episodes)}")
         return episodes
@@ -100,8 +134,8 @@ class RobotwinDataPacker(BaseLmdbManipulationDataPacker):
     def _pack(self):
         num_valid_ep = 0
         for ep_id, ep in enumerate(self.episodes):
-            task_name, camera_type, ep_path, seed = ep
-            uuid = f"{task_name}_{camera_type}_seed{seed}"
+            task_name, config_name, ep_path, seed = ep
+            uuid = f"{task_name}_{config_name}_seed{seed}"
             logger.info(
                 f"start process [{ep_id + 1}/{len(self.episodes)}] {uuid}"
             )
@@ -169,15 +203,30 @@ class RobotwinDataPacker(BaseLmdbManipulationDataPacker):
             )
             self.meta_pack_file.write(f"{uuid}/camera_names", camera_names)
 
+            instruction_file = os.path.join(
+                os.sep,
+                *ep_path.split(os.sep)[:-2],
+                f"instructions/episode{ep_id}.json",
+            )
+            if os.path.exists(instruction_file):
+                instructions = json.load(open(instruction_file))
+                self.meta_pack_file.write(
+                    f"{uuid}/instructions",
+                    instructions,
+                )
+
             index_data = dict(
                 uuid=uuid,
                 task_name=task_name,
+                config_name=config_name,
                 num_steps=num_steps,
                 seeed=seed,
-                camera_type=camera_type,
                 simulation=True,
-                embodiment=self.embodiment,
             )
+            if self.camera_name is not None:
+                index_data["camera_type"] = self.camera_name
+            if self.embodiment is not None:
+                index_data["embodiment"] = self.embodiment
             self.meta_pack_file.write(f"{uuid}/meta_data", index_data)
             self.write_index(ep_id, index_data)
             num_valid_ep += 1
@@ -205,6 +254,7 @@ if __name__ == "__main__":
     parser.add_argument("--embodiment", type=str, default=None)
     parser.add_argument("--robotwin_aug", type=str, default=None)
     parser.add_argument("--camera_name", type=str, default=None)
+    parser.add_argument("--config_name", type=str, default=None)
     args = parser.parse_args()
 
     if args.task_names is None:
@@ -219,5 +269,6 @@ if __name__ == "__main__":
         embodiment=args.embodiment,
         robotwin_aug=args.robotwin_aug,
         camera_name=args.camera_name,
+        config_name=args.config_name,
     )
     packer()

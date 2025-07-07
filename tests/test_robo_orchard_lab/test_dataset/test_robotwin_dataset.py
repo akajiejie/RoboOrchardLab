@@ -28,7 +28,12 @@ def test_robotwin_lmdb_data_packer(
     test_data_path = os.path.join(
         ROBO_ORCHARD_TEST_WORKSPACE,
         "robo_orchard_workspace/datasets/",
-        "robotwin/main_branch",
+        "robotwin/cvpr_round2_branch",
+    )
+    test_data_path_v2 = os.path.join(
+        ROBO_ORCHARD_TEST_WORKSPACE,
+        "robo_orchard_workspace/datasets/",
+        "robotwin/v2.0/origin_data",
     )
     os.chdir(PROJECT_ROOT)
     with tempfile.TemporaryDirectory() as workspace_root:
@@ -43,6 +48,23 @@ def test_robotwin_lmdb_data_packer(
                     "--embodiment aloha-agilex-1",
                     "--robotwin_aug m1_b1_l1_h0.03_c0",
                     "--camera_name D435",
+                ]
+            ),
+        )
+        ret_code = subprocess.check_call(cmd, shell=True)
+
+        # Check if the script ran successfully
+        assert ret_code == 0, f"Script failed with return code: {ret_code}"
+
+        cmd = (
+            " ".join(
+                [
+                    "python3",
+                    "robo_orchard_lab/dataset/robotwin/robotwin_packer.py",
+                    f"--input_path {test_data_path_v2}",
+                    f"--output_path {workspace_root}",
+                    "--task_names place_empty_cup",
+                    "--config_name base_setting",
                 ]
             ),
         )
