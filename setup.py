@@ -145,7 +145,7 @@ if __name__ == "__main__":
         "pydantic",
         "torch>=2.4.0",
         "torchvision>=0.19.0",
-        "numpy",
+        "numpy<2",  # dependencies may not be compatible with numpy 2.x
         "accelerate",
         "tqdm",
         "deprecated",
@@ -162,7 +162,7 @@ if __name__ == "__main__":
         # "robo_orchard_core>=0.1.0", # This should be used in release version.
         # use git url to install the latest version.
         # This is for non-release version only.
-        "robo_orchard_core@git+https://github.com/HorizonRobotics/robo_orchard_core.git@8d00515c12ba8ca542193b312d1f7ae412211f88",
+        "robo_orchard_core@git+https://github.com/HorizonRobotics/robo_orchard_core.git@042b27c0c4991d561c23faf83214309c458a185e",
     ]
     # optional dependencies
     extras_require = {
