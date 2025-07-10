@@ -187,7 +187,23 @@ if __name__ == "__main__":
             "opencv-python",
             "robo_orchard_schemas@git+https://github.com/HorizonRobotics/robo_orchard_schemas.git@9c8055a121c049ed94a7b48095c1bae6a0d0f60d",
         ],
-        "all": ["robo_orchard_lab[bip3d,sem,mcap_datasets]"],
+        "aux_think": [
+            "transformers<=4.37.2",
+            "tokenizers",
+            "peft<=0.15.2",
+            "markdown2[all]",
+            "scikit-learn>=1.2.2",
+            "opencv-python",
+            "uvicorn",
+            "fastapi",
+            "timm",
+            "ninja",
+            "tyro",
+            "loguru",
+            "hydra-core",
+            "deepspeed",
+        ],
+        "all": ["robo_orchard_lab[bip3d,sem,mcap_datasets,aux_think]"],
     }
 
     setup(
