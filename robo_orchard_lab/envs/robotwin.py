@@ -23,6 +23,7 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Sequence
 
+import gymnasium as gym
 import numpy as np
 import yaml
 from robo_orchard_core.envs.env_base import EnvBase, EnvBaseCfg
@@ -43,7 +44,7 @@ class RoboTwinEnvStepReturn:
     step_lim: int
 
 
-class RoboTwinEnv(EnvBase[Any]):
+class RoboTwinEnv(EnvBase[RoboTwinEnvStepReturn]):
     """RoboTwin environment.
 
     This class provides RoboTwin environment with robo_orchard_core interface.
@@ -55,10 +56,17 @@ class RoboTwinEnv(EnvBase[Any]):
 
     def __init__(self, cfg: RoboTwinEnvCfg):
         self.cfg = cfg
-        episode_info = None
+        from description.utils.generate_episode_instructions import (
+            generate_episode_descriptions,
+        )
 
         if self.cfg.check_expert:
-            episode_info, success = self._check_expert_traj()
+            logger.info(
+                "Checking expert trajectory for the task. "
+                "This may take a while... "
+                "You can set `check_expert=False` to skip this step."
+            )
+            task, success = self._check_expert_traj()
             while not success:
                 logger.warning(
                     f"Task {self.cfg.task_name} with seed {self.cfg.seed} "
@@ -66,25 +74,42 @@ class RoboTwinEnv(EnvBase[Any]):
                     "Using a new seed."
                 )
                 self.cfg.seed += 1
-                episode_info, success = self._check_expert_traj()
-        self._task = self._create_task()
-
-        from description.utils.generate_episode_instructions import (
-            generate_episode_descriptions,
-        )
-
-        if episode_info is not None:
+                task, success = self._check_expert_traj()
+            assert task is not None
             self._instructions = generate_episode_descriptions(
-                self.cfg.task_name, [episode_info["info"]]
+                self.cfg.task_name, [task.info["info"]]
             )[0]
         else:
-            self._instructions = None
+            if self.cfg.check_task_init:
+                logger.info(
+                    "Checking expert trajectory for the task. "
+                    "This may take a while... "
+                    "You can set `check_task_init=False` to skip this step."
+                )
+                task, success = self._check_expert_traj()
+                if task is None:
+                    raise RuntimeError(
+                        f"Failed to create task {self.cfg.task_name} "
+                        f"with seed {self.cfg.seed}. Please try a different "
+                        "seed or check the task configuration."
+                    )
+                self._instructions = generate_episode_descriptions(
+                    self.cfg.task_name, [task.info["info"]]
+                )[0]
+            else:
+                task = self._create_task()
+                self._instructions = None
+
+        assert task is not None
+        self._task = task
+        self.reset(clear_cache=False)
 
     @property
     def instructions(self) -> dict | None:
         """The instructions for the environment.
 
-        Only valid when check_expert is True.
+        This property is only valid if the environment is initialized
+        with `check_expert=True` or `check_task_init=True`.
         """
         return self._instructions
 
@@ -95,13 +120,12 @@ class RoboTwinEnv(EnvBase[Any]):
             task.setup_demo(**task_config)  # type: ignore
             return task
 
-    def _check_expert_traj(self) -> tuple[dict | None, bool]:
+    def _check_expert_traj(self) -> tuple[Base_Task | None, bool]:
         """Check whether current config can success if using expert trajectory.
 
         Returns:
-            tuple[dict | None, bool]: A tuple containing the episode
-                information and a boolean indicating whether the task
-                was successful.
+            tuple[Base_Task | None, bool]: A tuple containing the task and a
+                boolean indicating whether the task was successful.
 
         """
         with in_robotwin_workspace():
@@ -110,18 +134,18 @@ class RoboTwinEnv(EnvBase[Any]):
             config["render_freq"] = 0
             try:
                 task.setup_demo(**config)  # type: ignore
-                episode_info = task.play_once()  # type: ignore
+                task.play_once()  # type: ignore
             except Exception as e:
                 logger.error(
                     f"Failed to play the task config {self.cfg} "
                     f"with error: {e}"
                 )
-                return None, False
+                return task, False
             finally:
                 task.close_env()
 
         success: bool = task.plan_success and task.check_success()  # type: ignore
-        return episode_info, success
+        return task, success
 
     def step(
         self, action: list[float] | np.ndarray
@@ -169,12 +193,13 @@ class RoboTwinEnv(EnvBase[Any]):
         """Reset the environment."""
 
         self.close(clear_cache=clear_cache)
-        task_config = self.cfg.get_task_config()
-        self._task.setup_demo(**task_config)  # type: ignore
+        with in_robotwin_workspace():
+            task_config = self.cfg.get_task_config()
+            self._task.setup_demo(**task_config)  # type: ignore
 
     def close(self, clear_cache: bool = True):
         """Close the environment."""
-        self._task.close_env(clear_cache=True)
+        self._task.close_env(clear_cache=clear_cache)
         if self._task.render_freq > 0:
             self._task.viewer.close()
 
@@ -182,6 +207,30 @@ class RoboTwinEnv(EnvBase[Any]):
     def num_envs(self) -> int:
         # always 1 because RoboTwin does not support multi-envs
         return 1
+
+    @property
+    def action_space(self) -> gym.Space:
+        """The action space of the environment.
+
+        Actually RoboTwin does not implement the action space!
+        Call this method will raise an error!
+
+        Returns:
+            gym.Space: The action space of the environment.
+        """
+        return self._task.action_space
+
+    @property
+    def observation_space(self) -> gym.Space:
+        """The observation space of the environment.
+
+        Actually RoboTwin does not implement the observation space!
+        Call this method will raise an error!
+
+        Returns:
+            gym.Space: The observation space of the environment.
+        """
+        return self._task.observation_space
 
 
 class RoboTwinEnvCfg(EnvBaseCfg[RoboTwinEnv]):
@@ -204,6 +253,22 @@ class RoboTwinEnvCfg(EnvBaseCfg[RoboTwinEnv]):
     If true, the environment will attempt to run the task with given seed
     to check if the task can be completed successfully using the expert
     trajectory. If fails, new seed will be generated and used.
+    """
+
+    check_task_init: bool = True
+    """Whether to check the task initialization.
+
+    If true, the environment will call `play_once()` to execute the task
+    with expert trajectory to check if the task can be initialized
+    successfully.
+
+    This field should be set to True because some task attributes that
+    required for interaction may be initialized in the `play_once()` method,
+    such as `place_object_scale` task.
+
+    This should be a BUG in RoboTwin and will significantly affect the
+    performance of the environment initialization.
+
     """
 
     eval_mode: bool = False

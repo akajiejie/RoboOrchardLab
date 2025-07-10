@@ -16,11 +16,17 @@
 
 import logging
 
+import deprecated
+
 from robo_orchard_lab.distributed.utils import get_dist_info
 
 __all__ = ["basic_config"]
 
 
+@deprecated.deprecated(
+    version="0.2.0",
+    reason="Use `robo_orchard_core.utils.logging module` instead.",
+)
 def basic_config(
     format: str = "%rank %(asctime)s %(levelname)s %(name)s:%(lineno)d %(message)s",  # noqa
     datefmt: str = "%m/%d/%Y %H:%M:%S",
