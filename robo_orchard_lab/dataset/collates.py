@@ -35,6 +35,16 @@ def collate_batch_dict(batch):
             output[key] = torch.tensor(elements, dtype=torch.float64)
         elif isinstance(elements[0], int):
             output[key] = torch.tensor(elements)
+        elif isinstance(elements[0], list):
+            if len(elements[0]) != 0 and isinstance(
+                elements[0][0], np.ndarray
+            ):
+                output[key] = [
+                    [torch.from_numpy(np.array(sample)) for sample in b]
+                    for b in elements
+                ]
+            else:
+                output[key] = elements
         elif isinstance(elements[0], Dict):
             output[key] = collate_batch_dict(elements)
         else:

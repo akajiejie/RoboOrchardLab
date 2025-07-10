@@ -18,6 +18,7 @@ import time
 from unittest.mock import MagicMock
 
 import pytest
+import torch
 
 from robo_orchard_lab.pipeline.hooks import StatsMonitorConfig
 from robo_orchard_lab.pipeline.hooks.mixin import PipelineHookArgs
@@ -44,6 +45,14 @@ def mock_dataloader():
 @pytest.fixture(scope="function")
 def mock_hook_args(mock_accelerator, mock_dataloader):
     """Fixture to create mock HookArgs."""
+    optimizer = torch.optim.Adam(
+        params=[
+            {"params": torch.nn.Parameter(torch.randn(10)), "lr": 0.01},
+            {"params": torch.nn.Parameter(torch.randn(5)), "lr": 0.02},
+        ],
+        lr=0.0,
+    )
+
     return PipelineHookArgs(
         accelerator=mock_accelerator,
         dataloader=mock_dataloader,
@@ -54,7 +63,9 @@ def mock_hook_args(mock_accelerator, mock_dataloader):
         start_epoch=0,
         max_step=1000,
         max_epoch=10,
-        optimizer=None,
+        optimizer=optimizer,
+        model_outputs={},
+        reduce_loss=torch.tensor(0.0),
     )
 
 

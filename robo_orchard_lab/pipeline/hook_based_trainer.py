@@ -351,6 +351,9 @@ class HookBasedTrainer:
                     on_step_hook_args.model_outputs = (
                         on_batch_hook_args.model_outputs
                     )
+                    on_step_hook_args.reduce_loss = (
+                        on_batch_hook_args.reduce_loss
+                    )
 
         with self.hooks.begin(
             "on_loop", self._get_hook_args()

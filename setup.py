@@ -203,7 +203,15 @@ if __name__ == "__main__":
             "hydra-core",
             "deepspeed",
         ],
-        "all": ["robo_orchard_lab[bip3d,sem,mcap_datasets,aux_think]"],
+        "finegrasp": [
+            "scipy",
+            "einops",
+            "torch-geometric",
+            "open3d",
+        ],
+        "all": [
+            "robo_orchard_lab[bip3d,sem,mcap_datasets,aux_think,finegrasp]"
+        ],
     }
 
     setup(

@@ -14,14 +14,26 @@
 # implied. See the License for the specific language governing
 # permissions and limitations under the License.
 
-from . import huggingface
-from .build import build
-from .env import set_env
-from .geometry import depth_to_range_image, mask_points
-from .logging import basic_config as log_basic_config
-from .misc import as_sequence, stack_batch, to_tensor
-from .pydantic import (
-    pydantic_deserialize_with_pickle,
-    pydantic_serialize_with_pickle,
-)
-from .random import seed_everything
+import os
+import random
+
+import numpy as np
+import torch
+
+
+def seed_everything(seed: int):  # noqa: D205,D400
+    """Set seed for pseudo-random number generators.
+
+    Include: pytorch, numpy, python.random.
+
+    Args:
+        seed: the integer value seed for global random state.
+    """
+    # so users can verify the seed is properly set in distributed training.
+    # logger.info(f"Global seed set to {seed}")
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+    os.environ["PYTHONHASHSEED"] = str(seed)
+    return seed
