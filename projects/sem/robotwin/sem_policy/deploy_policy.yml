@@ -5,6 +5,7 @@ policy_name: sem_policy
 setting: null 
 ckpt_path: checkpoints/place_empty_cup/model.safetensors
 config_file: config_sem_robotwin.py
+ckpt_setting: null
 
 # keep unchanged
 task_name: null  

@@ -14,7 +14,17 @@ cp ../config_sem_robotwin.py ./
 
 ## Step 2: Modify the Config Settings
 
-Open `config_sem_robotwin.py` and update the URDF path to match the RoboTwin 2.0 asset path.
+For Local evaluation, open `config_sem_robotwin.py` and update the URDF path to match the RoboTwin 2.0 asset path.
+
+For server evaluation, copy the urdf file to submission folder.
+
+```bash
+cp ${ROBOTWIN_DIR}/assets/embodiments/aloha-agilex/urdf/arx5_description_isaac.urdf ./
+```
+Then open `config_sem_robotwin.py` and update the URDF path as:
+```python
+urdf="/workspace/policy/custom_policy/arx5_description_isaac.urdf",
+```
 
 ## Step 3: Prepare the Model Checkpoint
 
@@ -26,7 +36,9 @@ cp {PATH_TO_YOUR_SAFETENSOR_CKPT} ${CHECKPOINT_DIR}
 
 Replace `{PATH_TO_YOUR_SAFETENSOR_CKPT}` with the path to your `.safetensors` model file.
 
-## Step 4: Copy the Policy Folder to the RoboTwin 2.0 Project Directory
+We also provide a trained checkpoint for `place_empty_cup` task in  https://huggingface.co/HorizonRobotics/SEM-RoboTwin-Tiny.
+
+## Step 4: Local Evaluation - Copy the Policy Folder to the RoboTwin 2.0 Project Directory
 
 ```bash
 cd ..
@@ -35,9 +47,19 @@ cp -r sem_policy {ROBOTWIN2_PATH}/policy/
 
 Replace `{ROBOTWIN2_PATH}` with the path to your local RoboTwin 2.0 project.
 
-## Step 5: Run the Model Evaluation Script
+## Step 5: Local Evaluation - Run the Model Evaluation Script
 
 ```bash
 cd {ROBOTWIN2_PATH}/policy/sem_policy
 sh eval.sh
+```
+
+## Step 6: Server Evaluation - Submit Codes and Checkpoint
+
+```bash
+./submit upload \
+    --api-key {YOUR_API_KEY} \
+    --submission-id {SUBMISSION_ID} \
+    --dir ./sem_policy \
+    --checkpoint-dir ./sem_policy/checkpoints/place_empty_cup
 ```

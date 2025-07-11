@@ -24,7 +24,7 @@
 
 The current project adopts the SEM-GroundingDINO architecture, utilizing GroundingDINO-tiny as the pre-trained model.
 ```bash
-cd projects/sem_robotwin
+cd projects/sem/robotwin
 mkdir ckpt
 
 # Swin-Tiny
@@ -35,7 +35,7 @@ python tools/ckpt_rename.py ckpt/groundingdino_swint_ogc_mmdet-822d7e9d.pth --ou
 Download bert config and pretrain weights from [huggingface](https://huggingface.co/google-bert/bert-base-uncased/tree/main).
 
 ```text
-projects/sem_robotwin
+projects/sem/robotwin
 └──ckpt
     ├──groundingdino_swint_ogc_mmdet-822d7e9d.pth
     ├──groundingdino_swint_ogc_mmdet-822d7e9d-rename.pth  # generated after rename
@@ -52,9 +52,10 @@ projects/sem_robotwin
 First prepare [robotwin dependency](https://github.com/TianxingChen/RoboTwin/blob/main/INSTALLATION.md), then install the following packages:
 
 ```text
-torch==2.4.1+cu118 
+# It is recommended to use CUDA 11.8.
+torch==2.4.1
 torchmetrics==1.6.1 
-torchvision==0.19.1+cu118 
+torchvision==0.19.1
 transformers==4.49.0
 lmdb==1.6.2 
 safetensors==0.5.3 
@@ -72,7 +73,7 @@ First, run RoboTwin to obtain the expert data from the simulation.
 ```bash
 git clone https://github.com/RoboTwin-Platform/RoboTwin.git
 cd RoboTwin
-git checkout CVPR-Challenge-2025-Round2
+# git checkout CVPR-Challenge-2025-Round2
 
 # Follow the instructions in the RobotWin code repository to download the required assets
 python3 assets/_download.py
@@ -88,21 +89,21 @@ cd path/to/robo_orchard_lab
 # for robotwin2.0 master branch 
 python robo_orchard_lab/dataset/robotwin/robotwin_packer.py \
     --input_path path/to/robotwin_data \
-    --output_path "projects/sem_robotwin/data/lmdb" \
+    --output_path "projects/sem/robotwin/data/lmdb" \
     --task_names ${task_names} \
     --config_name demo_clean \
 
 # for CVPR-Challenge-2025-Round2 branch
 python robo_orchard_lab/dataset/robotwin/robotwin_packer.py \
     --input_path path/to/robotwin_data \
-    --output_path "projects/sem_robotwin/data/lmdb" \
+    --output_path "projects/sem/robotwin/data/lmdb" \
     --task_names ${task_names} \
     --embodiment aloha-agilex-1 \
 ```
 
 Make sure the resulting data path is as follows:
 ```text
-projects/sem_robotwin
+projects/sem/robotwin
 └──data
     └──lmdb
         ├──depth
@@ -115,7 +116,7 @@ projects/sem_robotwin
 
 Update the [URDF file directory in the config](./config_sem_robotwin.py#L21) to use the URDF provided by RoboTwin.
 ```bash
-cd projects/sem_robotwin
+cd projects/sem/robotwin
 CONFIG=config_sem_robotwin.py
 
 # train with single-gpu
