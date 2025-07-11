@@ -21,7 +21,10 @@ class TestRoboTwinEnv:
     def test_init_without_expert_check(self):
         env = RoboTwinEnv(
             RoboTwinEnvCfg(
-                task_name="place_object_scale", check_expert=False, seed=1
+                task_name="place_object_scale",
+                check_expert=False,
+                seed=1,
+                check_task_init=False,  # for fast initialization
             )
         )
         assert env is not None

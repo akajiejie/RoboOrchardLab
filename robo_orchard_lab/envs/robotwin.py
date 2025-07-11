@@ -26,7 +26,7 @@ from typing import TYPE_CHECKING, Any, Sequence
 import gymnasium as gym
 import numpy as np
 import yaml
-from robo_orchard_core.envs.env_base import EnvBase, EnvBaseCfg
+from robo_orchard_core.envs.env_base import EnvBase, EnvBaseCfg, EnvStepReturn
 from robo_orchard_core.utils.logging import LoggerManager
 
 if TYPE_CHECKING:
@@ -37,11 +37,12 @@ logger = LoggerManager().get_child(__name__)
 
 
 @dataclass
-class RoboTwinEnvStepReturn:
-    obvervation: dict[str, Any]
-    task_success: bool
-    take_action_cnt: int
-    step_lim: int
+class RoboTwinEnvStepReturn(EnvStepReturn[dict[str, Any] | None, bool]):
+    observations: dict[str, Any] | None
+    rewards: bool
+    """The rewards is a boolean indicating whether the task was successful."""
+    truncated: bool
+    """Whether the episode was truncated due to reaching the step limit."""
 
 
 class RoboTwinEnv(EnvBase[RoboTwinEnvStepReturn]):
@@ -147,9 +148,7 @@ class RoboTwinEnv(EnvBase[RoboTwinEnvStepReturn]):
         success: bool = task.plan_success and task.check_success()  # type: ignore
         return task, success
 
-    def step(
-        self, action: list[float] | np.ndarray
-    ) -> RoboTwinEnvStepReturn | None:
+    def step(self, action: list[float] | np.ndarray) -> RoboTwinEnvStepReturn:
         """Take a step in the environment.
 
         Args:
@@ -173,18 +172,18 @@ class RoboTwinEnv(EnvBase[RoboTwinEnvStepReturn]):
                 )
 
         self._task.take_action(action)
+
         if self._task.take_action_cnt >= self._task.step_lim:  # type: ignore
-            logger.warning(
-                f"Task {self.cfg.task_name} reached step limit "
-                f"{self._task.step_lim}. Ending episode."
-            )
-            return None
+            truncated = True
+        else:
+            truncated = False
 
         return RoboTwinEnvStepReturn(
-            obvervation=self._task.get_obs(),
-            task_success=self._task.eval_success,
-            take_action_cnt=self._task.take_action_cnt,
-            step_lim=self._task.step_lim,  # type: ignore
+            observations=self._task.get_obs(),
+            rewards=self._task.eval_success,
+            terminated=None,
+            truncated=truncated,
+            info=self._task.info,
         )
 
     def reset(
@@ -231,6 +230,10 @@ class RoboTwinEnv(EnvBase[RoboTwinEnvStepReturn]):
             gym.Space: The observation space of the environment.
         """
         return self._task.observation_space
+
+    def unwrapped_env(self) -> Base_Task:
+        """Get the original RoboTwin environment."""
+        return self._task
 
 
 class RoboTwinEnvCfg(EnvBaseCfg[RoboTwinEnv]):

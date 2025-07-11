@@ -15,8 +15,7 @@
 # permissions and limitations under the License.
 
 from __future__ import annotations
-from dataclasses import dataclass
-from typing import Any, Optional, Sequence
+from typing import Any, Optional, Sequence, TypeAlias
 
 import gymnasium as gym
 import numpy as np
@@ -24,19 +23,13 @@ import torch
 from mani_skill.agents.base_agent import BaseAgent
 from mani_skill.envs.sapien_env import BaseEnv
 from mani_skill.utils.structs.types import SimConfig
-from robo_orchard_core.envs.env_base import EnvBase, EnvBaseCfg
+from robo_orchard_core.envs.env_base import EnvBase, EnvBaseCfg, EnvStepReturn
 from robo_orchard_core.utils.logging import LoggerManager
 
 logger = LoggerManager().get_child(__name__)
 
 
-@dataclass
-class ManiSkillEnvReturn:
-    observation: dict[str, Any]
-    reward: torch.Tensor
-    terminated: torch.Tensor
-    truncated: torch.Tensor
-    info: dict[str, Any]
+ManiSkillEnvReturn: TypeAlias = EnvStepReturn[dict[str, Any], torch.Tensor]
 
 
 class ManiSkillEnv(EnvBase[ManiSkillEnvReturn]):
@@ -109,6 +102,10 @@ class ManiSkillEnv(EnvBase[ManiSkillEnvReturn]):
             gym.Space: The observation space of the environment.
         """
         return self.env.observation_space
+
+    def unwrapped_env(self) -> BaseEnv:
+        """Get the original ManiSkill environment."""
+        return self.env
 
 
 class ManiSkillEnvCfg(EnvBaseCfg[ManiSkillEnv]):
