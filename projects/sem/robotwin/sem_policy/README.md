@@ -50,6 +50,11 @@ Replace `{ROBOTWIN2_PATH}` with the path to your local RoboTwin 2.0 project.
 ## Step 5: Local Evaluation - Run the Model Evaluation Script
 
 ```bash
+cp {ROBOTWIN2_PATH}/task_config/_embodiment_config.yml {ROBOTWIN2_PATH}/task_config/agent_config.yml 
+```
+change `depth` in agent_config.yml to true
+
+```
 cd {ROBOTWIN2_PATH}/policy/sem_policy
 sh eval.sh
 ```
