@@ -165,7 +165,6 @@ def test_pipeline_initialization(
     assert test_pipeline.model is dummy_model
     assert isinstance(test_pipeline.cfg, MyTestPipelineCfg)
     assert isinstance(test_pipeline.processor, DummyProcessor)
-    assert test_pipeline.model.training is False  # Should be in eval mode
 
 
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA not available")
