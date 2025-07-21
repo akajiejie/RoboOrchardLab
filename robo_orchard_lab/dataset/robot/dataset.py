@@ -244,7 +244,7 @@ class ROMultiRowDataset(RODataset):
         ).items():
             col_dataset = self._column_datasets[col_name]
             cur_row[col_name] = [
-                col_dataset[idx] if idx is not None else None
+                col_dataset[idx][col_name] if idx is not None else None
                 for idx in idx_rows
             ]
         return cur_row

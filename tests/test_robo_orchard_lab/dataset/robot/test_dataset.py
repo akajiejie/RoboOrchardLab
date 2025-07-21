@@ -386,6 +386,7 @@ class TestRoboTwinDataset:
             row["timestamp_min"],
             row["timestamp_max"],
         )
+        print("left_camera intrinsic: ", row["left_camera"].intrinsic_matrices)
 
 
 class TestMultiRowDataset:

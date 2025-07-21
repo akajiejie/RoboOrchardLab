@@ -304,7 +304,13 @@ class DeltaTimestampSampler(MultiRowSampler):
 class DeltaTimestampSamplerConfig(
     MultiRowSamplerConfig[DeltaTimestampSampler]
 ):
-    """Configuration class for DeltaTimestampSampler."""
+    """Configuration class for DeltaTimestampSampler.
+
+    This configuration define the sampling strategy based on delta timestamps
+    for each column. It allows specifying the delta timestamps and the
+    tolerance for matching timestamps.
+
+    """
 
     class_type: Type[DeltaTimestampSampler] = DeltaTimestampSampler
 

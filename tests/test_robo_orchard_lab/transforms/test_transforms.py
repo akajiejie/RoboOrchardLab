@@ -14,10 +14,12 @@
 # implied. See the License for the specific language governing
 # permissions and limitations under the License.
 from __future__ import annotations
+import pickle
 from dataclasses import dataclass
 from typing import Type
 
 import pytest
+import torch
 from pydantic import BaseModel
 
 from robo_orchard_lab.dataset.transforms import (
@@ -205,6 +207,20 @@ class TestDictTransforms:
         assert result["input_value"] == 15
         assert len(result.keys()) == 1
 
+    def test_pickle_dumps(self):
+        cfg = DummyTransformConfig(
+            add_value=10, class_type=DummyBaseModelTransform
+        )
+        ts = cfg()
+        ts.tensor = torch.tensor([1, 2, 3])  # type: ignore
+        ts_bytes = pickle.dumps(ts)
+        state = ts.__getstate__()
+        assert "tensor" in state.state
+
+        ts_recovered = pickle.loads(ts_bytes)
+        print(ts_recovered)
+        print(ts_recovered.tensor)
+
 
 class TestConcatDictTransform:
     """Tests for the ConcatDictTransform."""
@@ -239,3 +255,17 @@ class TestConcatDictTransform:
         assert result["input_value"] == 5
         assert set(transform.mapped_input_columns) == set(["input_value"])
         assert set(transform.mapped_output_columns) == set(["value"])
+
+    def test_pickle_dumps(self):
+        cfg = ConcatDictTransformConfig(
+            transforms=[
+                DummyTransformConfig(add_value=10),
+                DummyTransformConfig(add_value=20),
+            ]
+        )
+        transform = cfg()
+        transform._transforms[0].tensor = torch.tensor([1, 2, 3])  # type: ignore
+
+        ts_bytes = pickle.dumps(transform)
+        transform_recovered = pickle.loads(ts_bytes)
+        print(transform_recovered._transforms[0].tensor)
