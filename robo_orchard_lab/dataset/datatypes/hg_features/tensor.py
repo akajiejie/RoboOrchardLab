@@ -18,6 +18,7 @@ from dataclasses import dataclass
 from io import BytesIO
 from typing import TypedDict
 
+import datasets as hg_datasets
 import numpy as np
 import pyarrow as pa
 import torch
@@ -25,6 +26,7 @@ import torch
 from robo_orchard_lab.dataset.datatypes.hg_features.base import (
     FeatureDecodeMixin,
     RODataFeature,
+    RODictDataFeature,
     hg_dataset_feature,
 )
 
@@ -83,26 +85,26 @@ class TensorFeatureSerialized(TypedDict):
 
 @hg_dataset_feature
 @dataclass
-class TypedTensorFeature(RODataFeature, FeatureDecodeMixin):
+class TypedTensorFeature(RODictDataFeature, FeatureDecodeMixin):
     """A feature for storing typed tensors in a dataset.
 
     The underlying data is stored as a flattened numpy array
     with shape information.
-
     """
 
     dtype: str
     decode: bool = True
     as_torch_tensor: bool = True
 
-    @property
-    def pa_type(self) -> pa.DataType:
-        return pa.struct(
-            {
-                "data": pa.list_(pa.from_numpy_dtype(np.dtype(self.dtype))),
-                "shape": pa.list_(pa.int32()),
-            }
-        )
+    def __post_init__(self):
+        self._dict = {
+            "data": hg_datasets.features.features.Sequence(
+                hg_datasets.features.Value(self.dtype)
+            ),
+            "shape": hg_datasets.features.Sequence(
+                hg_datasets.features.Value("int32")
+            ),
+        }
 
     def encode_example(
         self, value: np.ndarray | torch.Tensor | None

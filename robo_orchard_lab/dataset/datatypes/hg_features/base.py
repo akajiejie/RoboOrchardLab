@@ -27,6 +27,8 @@ from typing_extensions import TypeVar
 
 __all__ = [
     "RODataFeature",
+    "RODictDataFeature",
+    "TypedDictFeatureDecode",
     "FeatureDecodeMixin",
     "ToDataFeatureMixin",
     "hg_dataset_feature",
@@ -35,16 +37,32 @@ __all__ = [
 ]
 
 
-@dataclass
 class FeatureDecodeMixin(metaclass=ABCMeta):
     """Mixin class for features that support decoding."""
 
     @abstractmethod
-    def decode_example(self, value: Any) -> Any:
+    def decode_example(self, value: Any, **kwargs) -> Any:
         """Decode the example value from its stored format."""
         raise NotImplementedError(
             "Subclasses must implement decode_example method."
         )
+
+
+class TypedDictFeatureDecode(FeatureDecodeMixin):
+    _dict: dict = field(init=False, repr=False)
+    _decode_type: type = field(init=False, repr=False)
+    decode: bool = True
+
+    def decode_example(self, value: Any, **kwargs) -> Any:
+        if not self.decode:
+            raise RuntimeError(
+                "This feature does not support decoding. "
+                "Set decode=True to enable decoding."
+            )
+        ret: dict = hg_datasets.features.features.decode_nested_example(
+            schema=self._dict, obj=value
+        )
+        return self._decode_type(**ret)
 
 
 @dataclass
@@ -80,6 +98,42 @@ class RODataFeature(metaclass=ABCMeta):
         )
 
 
+class RODictDataFeature(RODataFeature):
+    """A feature that is composed of a dictionary of features.
+
+    This class provide a easy way to define a feature that is a dictionary
+    of features. It is useful for defining complex features that are
+    composed of multiple fields. The user should define the `_dict` attribute
+    as a dictionary mapping field names to features. The keys of the dictionary
+    are the field names, and the values are the features.
+
+    """
+
+    _dict: dict = field(init=False, repr=False)
+
+    @property
+    def pa_type(self) -> pa.DataType:
+        """Return the pyarrow data type for this feature."""
+        return hg_datasets.features.features.get_nested_type(self._dict)
+
+    def encode_example(self, value: Any) -> Any:
+        return hg_datasets.features.features.encode_nested_example(
+            schema=self._dict, obj=value
+        )
+
+    def items(self):
+        """Return the items of the dictionary."""
+        return self._dict.items()
+
+    def keys(self):
+        """Return the keys of the dictionary."""
+        return self._dict.keys()
+
+    def values(self):
+        """Return the values of the dictionary."""
+        return self._dict.values()
+
+
 class ToDataFeatureMixin(metaclass=ABCMeta):
     """Mixin class for features that can be converted to a pyarrow DataType."""
 
@@ -89,6 +143,10 @@ class ToDataFeatureMixin(metaclass=ABCMeta):
         raise NotImplementedError(
             "Subclasses must implement dataset_feature method."
         )
+
+    def get(self, key: str, default: Any = None) -> Any:
+        """Get the value of the feature by key."""
+        return getattr(self, key, default)
 
 
 RODataFeatureType = TypeVar("RODataFeatureType", bound=RODataFeature)

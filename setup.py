@@ -154,7 +154,7 @@ if __name__ == "__main__":
         "huggingface_hub",
         # metric
         "torchmetrics>=1.6",
-        "datasets>=3.2.0",
+        "datasets>=4.0.0",
         "sqlalchemy",
         "duckdb-engine",
         "fsspec",

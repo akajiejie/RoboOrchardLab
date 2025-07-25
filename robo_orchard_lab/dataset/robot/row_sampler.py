@@ -86,9 +86,15 @@ class MultiRowSampler(ClassInitFromConfigMixin, metaclass=ABCMeta):
 
     @abstractmethod
     def sample_row_idx(
-        self, index_dataset: HFDataset, index: int
+        self,
+        index_dataset: HFDataset,
+        index: int,
     ) -> dict[str, list[int | None]]:
         """Sample a list of row indices from the index dataset.
+
+        Args:
+            index_dataset (HFDataset): The dataset from which to sample rows.
+            index (int): The index or indices to sample.
 
         Returns:
             dict[str, list[int | None]]: A dictionary where keys are column
@@ -124,6 +130,13 @@ class MultiRowSamplerConfig(ClassConfig[MultiRowSamplerType]):
 
 
 class IndexFrameCache:
+    """Cache for frames indexed by their timestamps.
+
+    Note that the cached frame should be in the same episode,
+    and the
+    timestamp_min and timestamp_max should be defined in the frame.
+    """
+
     def __init__(self):
         """Initialize the IndexFrameCache."""
         self._frame_ts_min_list = SortedList(key=lambda x: x[0])
@@ -220,8 +233,8 @@ class DeltaTimestampSampler(MultiRowSampler):
     def sample_row_idx(
         self, index_dataset: HFDataset, index: int
     ) -> dict[str, list[int | None]]:
-        cache = self._prepare_cache(index_dataset, index)
         cur_row = index_dataset[index]
+        cache = self._prepare_cache(index_dataset, index)
         ret: dict[str, list[int | None]] = {}
         for column, delta_ts_list in self.cfg.column_delta_ts.items():
             sampled_rows = []
@@ -253,9 +266,13 @@ class DeltaTimestampSampler(MultiRowSampler):
         return ret
 
     def _prepare_cache(
-        self, index_dataset: HFDataset, index: int
+        self,
+        index_dataset: HFDataset,
+        index: int,
+        cache: IndexFrameCache | None = None,
     ) -> IndexFrameCache:
-        cache = IndexFrameCache()
+        if cache is None:
+            cache = IndexFrameCache()
         cur_row = index_dataset[index]
         cache.add_frame(index, cur_row)
         cur_episode = cur_row["episode_index"]

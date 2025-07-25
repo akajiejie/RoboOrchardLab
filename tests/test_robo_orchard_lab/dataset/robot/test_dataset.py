@@ -95,10 +95,6 @@ class DummyEpisodePackaging(EpisodePackaging):
                 "joints": BatchJointsStateFeature(),
             }
         )
-        return {
-            "data": hg_datasets.Value("string"),
-            "joints": BatchJointsStateFeature(),
-        }
 
     def generate_frames(self) -> Generator[DataFrame, None, None]:
         for _ in range(self._gen_frame_num):
@@ -119,7 +115,7 @@ class DummyEpisodePackaging(EpisodePackaging):
             )
 
 
-@pytest.fixture
+@pytest.fixture(scope="module")
 def example_dataset_path_no_shard(tmp_local_folder: str) -> str:
     dataset_dir = os.path.join(
         tmp_local_folder,
@@ -169,7 +165,7 @@ def example_dataset_path_no_shard(tmp_local_folder: str) -> str:
     return dataset_dir
 
 
-@pytest.fixture
+@pytest.fixture(scope="module")
 def example_dataset_path_shard(tmp_local_folder: str) -> str:
     dataset_dir = os.path.join(
         tmp_local_folder,
@@ -342,6 +338,7 @@ class TestDataset:
             last_index = frame["index"]
             episode = dataset.get_meta(Episode, frame["episode_index"])
             assert episode is not None
+            assert not isinstance(episode, list)
             assert episode.index == frame["episode_index"]
             max_episode_idx = max(max_episode_idx, episode.index)
             assert frame["index"] >= episode.dataset_begin_index
@@ -366,6 +363,167 @@ class TestDataset:
 
         assert max_episode_idx > 0
 
+    @pytest.mark.parametrize(
+        "idx",
+        [None, 0, [0, 1], [None, 0]],
+    )
+    def test_get_meta(
+        self, example_dataset_path: str, idx: int | None | list[int | None]
+    ):
+        dataset = RODataset(dataset_path=example_dataset_path)
+        ret = dataset.get_meta(Episode, idx)
+        if idx is None:
+            assert ret is None
+        elif isinstance(idx, list):
+            assert isinstance(ret, list)
+            for i, single_ret in zip(idx, ret, strict=True):
+                if i is None:
+                    assert single_ret is None
+                else:
+                    assert isinstance(single_ret, Episode)
+                    assert single_ret.index == i
+        else:
+            assert isinstance(ret, Episode)
+            assert ret.index == idx
+
+    @pytest.mark.parametrize("index2meta", [True, False])
+    def test_get_item_by_slice(
+        self, example_dataset_path: str, index2meta: bool
+    ):
+        dataset = RODataset(
+            dataset_path=example_dataset_path, meta_index2meta=index2meta
+        )
+        # test access by slice
+        multi_row = dataset[0:2]
+        assert isinstance(multi_row, dict)
+        if index2meta:
+            assert isinstance(multi_row["episode"], list)
+            assert isinstance(multi_row["episode"][0], Episode)
+        else:
+            assert isinstance(multi_row["episode_index"], list)
+            assert isinstance(multi_row["episode_index"][0], int)
+
+    @pytest.mark.parametrize("index2meta", [True, False])
+    def test_get_item_by_list(
+        self, example_dataset_path: str, index2meta: bool
+    ):
+        dataset = RODataset(
+            dataset_path=example_dataset_path, meta_index2meta=index2meta
+        )
+        # test access by list
+        multi_row = dataset[[0, 1, 2]]
+        assert isinstance(multi_row, dict)
+        if index2meta:
+            assert isinstance(multi_row["episode"], list)
+            assert isinstance(multi_row["episode"][0], Episode)
+        else:
+            assert isinstance(multi_row["episode_index"], list)
+            assert isinstance(multi_row["episode_index"][0], int)
+
+        multi_row = dataset[[0]]
+        assert isinstance(multi_row, dict)
+        if index2meta:
+            assert isinstance(multi_row["episode"], list)
+            assert isinstance(multi_row["episode"][0], Episode)
+        else:
+            assert isinstance(multi_row["episode_index"], list)
+            assert isinstance(multi_row["episode_index"][0], int)
+
+    @pytest.mark.parametrize("index2meta", [True, False])
+    def test_get_item_by_int(
+        self, example_dataset_path: str, index2meta: bool
+    ):
+        dataset = RODataset(
+            dataset_path=example_dataset_path, meta_index2meta=index2meta
+        )
+        # test single row access
+        row = dataset[0]
+        assert isinstance(row, dict)
+        if index2meta:
+            assert isinstance(row["episode"], Episode)
+        else:
+            assert isinstance(row["episode_index"], int)
+
+    @pytest.mark.parametrize("index2meta", [True, False])
+    def test_get_item_by_str(
+        self, example_dataset_path: str, index2meta: bool
+    ):
+        dataset = RODataset(
+            dataset_path=example_dataset_path, meta_index2meta=index2meta
+        )
+        # test single row access
+        row = dataset["joints"]
+        assert isinstance(row, hg_datasets.arrow_dataset.Column)
+        row = dataset["episode_index"]
+        if index2meta:
+            assert isinstance(row, list)
+            assert isinstance(row[0], Episode)
+        else:
+            assert isinstance(row, hg_datasets.arrow_dataset.Column)
+            assert isinstance(row[0], int)
+
+    @pytest.mark.parametrize("index2meta", [True, False])
+    def test_select_columns(self, example_dataset_path: str, index2meta: bool):
+        dataset = RODataset(
+            dataset_path=example_dataset_path, meta_index2meta=index2meta
+        )
+        # test select columns
+        selected_dataset = dataset.select_columns(["joints"])
+        assert isinstance(selected_dataset, RODataset)
+        assert "joints" in selected_dataset.features
+        print("selected dataset features: ", selected_dataset.features)
+        assert len(selected_dataset.features) == 1
+        print(selected_dataset[0])
+        assert dataset[0]["joints"] == selected_dataset[0]["joints"]
+
+    @pytest.mark.parametrize("index2meta", [True, False])
+    def test_select(self, example_dataset_path: str, index2meta: bool):
+        dataset = RODataset(
+            dataset_path=example_dataset_path, meta_index2meta=index2meta
+        )
+        offset = 3
+        selected_dataset = dataset.select(indices=range(offset, offset + 2))
+        assert isinstance(selected_dataset, RODataset)
+        assert len(selected_dataset) == 2
+        assert selected_dataset[0]["index"] == dataset[offset]["index"]
+
+    @pytest.mark.parametrize("index2meta", [True, False])
+    def test_pickleable(self, example_dataset_path: str, index2meta: bool):
+        dataset = RODataset(
+            dataset_path=example_dataset_path, meta_index2meta=index2meta
+        )
+        # test pickling
+        import pickle
+
+        pickled_dataset = pickle.dumps(dataset)
+        print("len(pickled_dataset): ", len(pickled_dataset))
+        unpickled_dataset = pickle.loads(pickled_dataset)
+        assert isinstance(unpickled_dataset, RODataset)
+        assert len(unpickled_dataset) == len(dataset)
+        assert unpickled_dataset[0]["joints"] == dataset[0]["joints"]
+
+    @pytest.mark.parametrize("index2meta", [True, False])
+    def test_save(
+        self,
+        example_dataset_path: str,
+        tmp_local_folder: str,
+        index2meta: bool,
+    ):
+        dataset = RODataset(
+            dataset_path=example_dataset_path, meta_index2meta=index2meta
+        )
+        new_dataset_dir = os.path.join(
+            tmp_local_folder,
+            "test_save_"
+            + "".join(random.choices(string.ascii_lowercase, k=8)),
+        )
+        dataset.save_to_disk(dataset_path=new_dataset_dir)
+        new_dataset = RODataset(
+            dataset_path=new_dataset_dir, meta_index2meta=index2meta
+        )
+        assert len(new_dataset) == len(dataset)
+        assert new_dataset[0]["joints"] == dataset[0]["joints"]
+
 
 class TestRoboTwinDataset:
     def test_load_train(self, ROBO_ORCHARD_TEST_WORKSPACE: str):
@@ -373,7 +531,7 @@ class TestRoboTwinDataset:
             ROBO_ORCHARD_TEST_WORKSPACE,
             "robo_orchard_workspace/datasets/robotwin/ro_dataset",
         )
-        dataset = RODataset(dataset_path=path)
+        dataset = RODataset(dataset_path=path, meta_index2meta=True)
         print(len(dataset))
         print(dataset.frame_dataset.features)
         row = dataset[500]
@@ -416,6 +574,95 @@ class TestMultiRowDataset:
 
         dataset = ROMultiRowDataset(
             dataset_path=path,
+            row_sampler=DeltaTimestampSamplerConfig(
+                column_delta_ts={
+                    "joints": [0, 0.0 + 0.1],
+                },
+                tolerance=0.019,
+            ),
+        )
+        row = dataset[0]
+        list_column_names = ["joints"]
+        for k in row.keys():
+            if k in list_column_names:
+                assert isinstance(row[k], list), (
+                    f"Expected {k} to be a list, but got {type(row[k])}"
+                )
+            else:
+                assert not isinstance(row[k], list), (
+                    f"Expected {k} to not be a list, but got {type(row[k])}"
+                )
+
+    def test_with_delta_ts_by_slice(self, ROBO_ORCHARD_TEST_WORKSPACE: str):
+        path = os.path.join(
+            ROBO_ORCHARD_TEST_WORKSPACE,
+            "robo_orchard_workspace/datasets/robotwin/ro_dataset",
+        )
+
+        dataset = ROMultiRowDataset(
+            dataset_path=path,
+            row_sampler=DeltaTimestampSamplerConfig(
+                column_delta_ts={
+                    "joints": [0, 0.0 + 0.1],
+                },
+                tolerance=0.019,
+            ),
+        )
+        row = dataset[0:3]
+        list_column_names = ["joints"]
+        for k in row.keys():
+            assert isinstance(row[k], list), (
+                f"Expected {k} to be a list, but got {type(row[k])}"
+            )
+            assert len(row[k]) == 3
+            if k in list_column_names:
+                assert isinstance(row[k][0], list), (
+                    f"Expected {k}[0] to be a list, but got {type(row[k])}"
+                )
+            else:
+                assert not isinstance(row[k][0], list), (
+                    f"Expected {k} to not be a list, but got {type(row[k])}"
+                )
+
+    def test_with_delta_ts_by_list(self, ROBO_ORCHARD_TEST_WORKSPACE: str):
+        path = os.path.join(
+            ROBO_ORCHARD_TEST_WORKSPACE,
+            "robo_orchard_workspace/datasets/robotwin/ro_dataset",
+        )
+
+        dataset = ROMultiRowDataset(
+            dataset_path=path,
+            row_sampler=DeltaTimestampSamplerConfig(
+                column_delta_ts={
+                    "joints": [0, 0.0 + 0.1],
+                },
+                tolerance=0.019,
+            ),
+        )
+        row = dataset[[0, 3, 1]]
+        list_column_names = ["joints"]
+        for k in row.keys():
+            assert isinstance(row[k], list), (
+                f"Expected {k} to be a list, but got {type(row[k])}"
+            )
+            assert len(row[k]) == 3
+            if k in list_column_names:
+                assert isinstance(row[k][0], list), (
+                    f"Expected {k}[0] to be a list, but got {type(row[k])}"
+                )
+            else:
+                assert not isinstance(row[k][0], list), (
+                    f"Expected {k} to not be a list, but got {type(row[k])}"
+                )
+
+    def test_from_dataset(self, ROBO_ORCHARD_TEST_WORKSPACE: str):
+        path = os.path.join(
+            ROBO_ORCHARD_TEST_WORKSPACE,
+            "robo_orchard_workspace/datasets/robotwin/ro_dataset",
+        )
+
+        dataset = ROMultiRowDataset.from_dataset(
+            RODataset(dataset_path=path),
             row_sampler=DeltaTimestampSamplerConfig(
                 column_delta_ts={
                     "joints": [0, 0.0 + 0.1],

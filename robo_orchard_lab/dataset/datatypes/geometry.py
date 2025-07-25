@@ -15,11 +15,10 @@
 # permissions and limitations under the License.
 
 from __future__ import annotations
-import copy
-from dataclasses import dataclass
+from dataclasses import Field, dataclass
 from typing import Literal
 
-import pyarrow as pa
+import datasets as hg_datasets
 from robo_orchard_core.datatypes.geometry import (
     BatchFrameTransform as _BatchFrameTransform,
     BatchPose as _BatchPose,
@@ -27,9 +26,9 @@ from robo_orchard_core.datatypes.geometry import (
 )
 
 from robo_orchard_lab.dataset.datatypes.hg_features import (
-    FeatureDecodeMixin,
-    RODataFeature,
+    RODictDataFeature,
     ToDataFeatureMixin,
+    TypedDictFeatureDecode,
     check_fields_consistency,
     hg_dataset_feature,
 )
@@ -47,9 +46,19 @@ __all__ = [
 ]
 
 
+class BatchTransform3D(_BatchTransform3D, ToDataFeatureMixin):
+    @classmethod
+    def dataset_feature(
+        cls, dtype: Literal["float32", "float64"] = "float32"
+    ) -> BatchTransform3DFeature:
+        ret = BatchTransform3DFeature(dtype=dtype)
+        check_fields_consistency(cls, ret.pa_type)
+        return ret
+
+
 @hg_dataset_feature
 @dataclass
-class BatchTransform3DFeature(RODataFeature, FeatureDecodeMixin):
+class BatchTransform3DFeature(RODictDataFeature, TypedDictFeatureDecode):
     """A feature for storing batch frame transforms in a dataset.
 
     The underlying data is stored as a serialized numpy array
@@ -58,102 +67,23 @@ class BatchTransform3DFeature(RODataFeature, FeatureDecodeMixin):
 
     dtype: Literal["float32", "float64"] = "float32"
     decode: bool = True
+    _decode_type: type = BatchTransform3D
 
     def __post_init__(self):
-        self._typed_tensor_feature = TypedTensorFeature(
+        typed_tensor_feature = TypedTensorFeature(
             dtype=self.dtype, as_torch_tensor=True
         )
-
-    @property
-    def pa_type(self) -> pa.StructType:
-        fields = _BatchTransform3D.model_fields
-
-        ret_dict: dict[str, pa.DataType] = {}
-        ret_dict["xyz"] = self._typed_tensor_feature.pa_type
-        ret_dict["quat"] = self._typed_tensor_feature.pa_type
-        ret_dict["timestamps"] = pa.list_(pa.int64())
-
-        for field_name in fields:
-            if field_name not in ret_dict:
-                raise ValueError(
-                    f"Field {field_name} has no type defined in "
-                    "BatchTransform3DFeature. This means that the "
-                    "feature is not fully implemented."
-                )
-        return pa.struct([pa.field(k, v) for k, v in ret_dict.items()])
-
-    def encode_example(self, value: _BatchTransform3D | None) -> dict | None:
-        if value is None:
-            return None
-        tensor_feature = self._typed_tensor_feature
-        return {
-            "xyz": tensor_feature.encode_example(value.xyz),
-            "quat": tensor_feature.encode_example(value.quat),
-            "timestamps": value.timestamps,
+        state = {
+            "xyz": typed_tensor_feature,
+            "quat": typed_tensor_feature,
+            "timestamps": hg_datasets.Sequence(hg_datasets.Value("int64")),
         }
+        if not hasattr(self, "_dict"):
+            self._dict = {}
+        if isinstance(self._dict, Field):
+            self._dict = {}
 
-    def decode_example(
-        self, value: dict | None, **kwargs
-    ) -> BatchTransform3D | None:
-        if not self.decode:
-            raise RuntimeError(
-                "Decoding is disabled for this feature. Please use "
-                "BatchTransform3DFeature(decode=True) instead."
-            )
-        if value is None:
-            return None
-        tensor_feature = self._typed_tensor_feature
-        value = copy.copy(value)
-        value["xyz"] = tensor_feature.decode_example(value["xyz"])
-        value["quat"] = tensor_feature.decode_example(value["quat"])
-        return BatchTransform3D(**value)
-
-
-class BatchTransform3D(_BatchTransform3D, ToDataFeatureMixin):
-    @classmethod
-    def dataset_feature(
-        cls, dtype: Literal["float32", "float64"] = "float32"
-    ) -> BatchTransform3DFeature:
-        ret = BatchTransform3DFeature(dtype=dtype)
-
-        check_fields_consistency(cls, ret.pa_type)
-
-        return ret
-
-
-@hg_dataset_feature
-@dataclass
-class BatchPoseFeature(BatchTransform3DFeature):
-    """A feature for storing batch poses in a dataset.
-
-    The underlying data is stored as a serialized numpy array
-    with additional metadata about the poses.
-    """
-
-    @property
-    def pa_type(self) -> pa.StructType:
-        parent_fields = list(super().pa_type.fields)
-        parent_fields.append(pa.field("frame_id", pa.string()))
-        return pa.struct(parent_fields)
-
-    def encode_example(self, value: _BatchPose | None) -> dict | None:
-        if value is None:
-            return None
-        parent_ret = super().encode_example(value)
-        assert parent_ret is not None
-        parent_ret["frame_id"] = value.frame_id
-        return parent_ret
-
-    def decode_example(self, value: dict | None, **kwargs) -> BatchPose | None:
-        if not self.decode:
-            raise RuntimeError(
-                "Decoding is disabled for this feature. Please use "
-                "BatchPoseFeature(decode=True) instead."
-            )
-        if value is None:
-            return None
-        parent_ret = super().decode_example(value)
-        return BatchPose(frame_id=value["frame_id"], **parent_ret.__dict__)
+        self._dict.update(state)
 
 
 class BatchPose(_BatchPose, ToDataFeatureMixin):
@@ -168,47 +98,18 @@ class BatchPose(_BatchPose, ToDataFeatureMixin):
 
 @hg_dataset_feature
 @dataclass
-class BatchFrameTransformFeature(BatchTransform3DFeature):
-    """A feature for storing batch frame transforms in a dataset.
+class BatchPoseFeature(BatchTransform3DFeature):
+    """A feature for storing batch poses in a dataset.
 
     The underlying data is stored as a serialized numpy array
-    with additional metadata about the frame transforms.
+    with additional metadata about the poses.
     """
 
-    @property
-    def pa_type(self) -> pa.StructType:
-        parent_fields = list(super().pa_type.fields)
-        parent_fields.append(pa.field("parent_frame_id", pa.string()))
-        parent_fields.append(pa.field("child_frame_id", pa.string()))
-        return pa.struct(parent_fields)
+    _decode_type: type = BatchPose
 
-    def encode_example(
-        self, value: _BatchFrameTransform | None
-    ) -> dict | None:
-        if value is None:
-            return None
-        parent_ret = super().encode_example(value)
-        assert parent_ret is not None
-        parent_ret["parent_frame_id"] = value.parent_frame_id
-        parent_ret["child_frame_id"] = value.child_frame_id
-        return parent_ret
-
-    def decode_example(
-        self, value: dict | None, **kwargs
-    ) -> BatchFrameTransform | None:
-        if not self.decode:
-            raise RuntimeError(
-                "Decoding is disabled for this feature. Please use "
-                "BatchFrameTransformFeature(decode=True) instead."
-            )
-        if value is None:
-            return None
-        parent_ret = super().decode_example(value)
-        return BatchFrameTransform(
-            parent_frame_id=value["parent_frame_id"],
-            child_frame_id=value["child_frame_id"],
-            **parent_ret.__dict__,
-        )
+    def __post_init__(self):
+        super().__post_init__()
+        self._dict["frame_id"] = hg_datasets.Value("string")
 
 
 class BatchFrameTransform(_BatchFrameTransform, ToDataFeatureMixin):
@@ -219,3 +120,20 @@ class BatchFrameTransform(_BatchFrameTransform, ToDataFeatureMixin):
         ret = BatchFrameTransformFeature(dtype=dtype)
         check_fields_consistency(cls, ret.pa_type)
         return ret
+
+
+@hg_dataset_feature
+@dataclass
+class BatchFrameTransformFeature(BatchTransform3DFeature):
+    """A feature for storing batch frame transforms in a dataset.
+
+    The underlying data is stored as a serialized numpy array
+    with additional metadata about the frame transforms.
+    """
+
+    _decode_type: type = BatchFrameTransform
+
+    def __post_init__(self):
+        super().__post_init__()
+        self._dict["parent_frame_id"] = hg_datasets.Value("string")
+        self._dict["child_frame_id"] = hg_datasets.Value("string")

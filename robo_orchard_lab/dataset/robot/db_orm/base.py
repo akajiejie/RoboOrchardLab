@@ -174,7 +174,9 @@ class PrimaryKeyMixin:
     def value_in(cls, keys: list[str], instances: Iterable[Any]) -> Any:
         """Get the where condition for objects of given class and keys.
 
-        Expression of (cls.key1, cls.key2) in ((inst.key1, inst.key2), ...).
+        Get the condition of:
+            cls.key1 == inst1.key1 and cls.key2 == inst1.key2...
+            or cls.key1 == inst2.key1 and cls.key2 == inst2.key2...
 
         Args:
             keys (List[str]): The list of keys to check.
