@@ -52,7 +52,7 @@ Replace `{ROBOTWIN2_PATH}` with the path to your local RoboTwin 2.0 project.
 ```bash
 cp {ROBOTWIN2_PATH}/task_config/_embodiment_config.yml {ROBOTWIN2_PATH}/task_config/agent_config.yml 
 ```
-change `depth` in agent_config.yml to true
+change `depth` in the evaluation `${task_config}`(e.g. `task_config/demo_clean.yml`) to true
 
 ```
 cd {ROBOTWIN2_PATH}/policy/sem_policy
