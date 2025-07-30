@@ -159,11 +159,9 @@ if __name__ == "__main__":
         "duckdb-engine",
         "fsspec",
         "sortedcontainers",
-        # robo orchard
-        # "robo_orchard_core>=0.1.0", # This should be used in release version.
         # use git url to install the latest version.
         # This is for non-release version only.
-        "robo_orchard_core@git+https://github.com/HorizonRobotics/robo_orchard_core.git@cbf97bd992e771c40184a9a79a50c97334196424",
+        "robo_orchard_core==0.2.0",
     ]
     # optional dependencies
     extras_require = {
@@ -186,7 +184,7 @@ if __name__ == "__main__":
             "mcap>=1.2.2",
             "foxglove-schemas-protobuf>=0.3.0",
             "opencv-python",
-            "robo_orchard_schemas@git+https://github.com/HorizonRobotics/robo_orchard_schemas.git@9c8055a121c049ed94a7b48095c1bae6a0d0f60d",
+            "robo_orchard_schemas==0.1.1",
         ],
         "aux_think": [
             "transformers<=4.37.2",
