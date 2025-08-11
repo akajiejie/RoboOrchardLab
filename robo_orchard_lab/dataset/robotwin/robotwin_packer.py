@@ -204,9 +204,9 @@ class RobotwinDataPacker(BaseLmdbManipulationDataPacker):
             self.meta_pack_file.write(f"{uuid}/camera_names", camera_names)
 
             instruction_file = os.path.join(
-                os.sep,
-                *ep_path.split(os.sep)[:-2],
-                f"instructions/episode{ep_id}.json",
+                os.path.dirname(os.path.dirname(ep_path)),
+                "instructions",
+                os.path.basename(ep_path).replace("hdf5", "json"),
             )
             if os.path.exists(instruction_file):
                 instructions = json.load(open(instruction_file))
