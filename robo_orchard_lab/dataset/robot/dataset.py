@@ -16,7 +16,8 @@
 from __future__ import annotations
 import json
 import os
-from typing import Any, Iterable, TypeAlias, TypeVar, overload
+from contextlib import contextmanager
+from typing import Any, Callable, Iterable, TypeAlias, TypeVar, overload
 
 import fsspec
 import torch
@@ -27,8 +28,8 @@ from datasets import (
 from datasets.arrow_dataset import Column
 from sqlalchemy import URL, Engine, select
 from sqlalchemy.orm import Session, make_transient
+from typing_extensions import Self
 
-from robo_orchard_lab.dataset.datatypes import *
 from robo_orchard_lab.dataset.robot.columns import (
     PreservedIndexColumnsKeys,
 )
@@ -40,6 +41,7 @@ from robo_orchard_lab.dataset.robot.db_orm import (
 )
 from robo_orchard_lab.dataset.robot.engine import create_engine
 from robo_orchard_lab.dataset.robot.row_sampler import (
+    CachedIndexDataset,
     MultiRowSampler,
     MultiRowSamplerConfig,
 )
@@ -111,6 +113,8 @@ class RODataset(TorchDataset):
         # load db
         self.db_engine = self._load_db(dataset_path)
 
+        self._transform: Callable[[dict], dict] | None = None
+
     def _get_state_(self) -> dict:
         """Get all internal state of the dataset.
 
@@ -162,11 +166,40 @@ class RODataset(TorchDataset):
 
     @property
     def features(self) -> Features:
+        """Get the features of the dataset.
+
+        Features are the schema of the original dataset without transforms.
+        """
         return self.frame_dataset.features
 
+    @property
+    def transform(self) -> Callable[[dict], dict] | None:
+        return self._transform
+
+    def set_transform(self, transform: Callable[[dict], dict] | None):
+        self._transform = transform
+
+    @contextmanager
+    def transform_context(self, transform: Callable[[dict], dict] | None):
+        """Context manager to temporarily set a transform for the dataset.
+
+        This is useful for applying a transform only within a specific
+        context, without permanently changing the dataset's transform.
+        """
+
+        old_transform = self._transform
+        self.set_transform(transform)
+        try:
+            yield self
+        finally:
+            self.set_transform(old_transform)
+
     def select_columns(
-        self, column_names: str | list[str], new_fingerprint: str | None = None
-    ) -> RODataset:
+        self,
+        column_names: str | list[str],
+        new_fingerprint: str | None = None,
+        include_index: bool = True,
+    ) -> Self:
         """Select one or more columns from the dataset.
 
         Args:
@@ -181,16 +214,29 @@ class RODataset(TorchDataset):
                 Dataset to ensure that the dataset is properly cached and
                 can be loaded efficiently
                 in the future. Defaults to None.
+            include_index (bool, optional): Whether to include the index
+                columns in the selected columns. If True, the index columns
+                will be included in the selected columns. Defaults to True.
 
         Returns:
-            RODataset: A new instance of `RODataset` with the selected columns.
+            Self: A new instance of type(self) with the selected columns.
 
         """
+        if not isinstance(column_names, (list, tuple)):
+            column_names = [column_names]
+        if isinstance(column_names, tuple):
+            column_names = list(column_names)
+        if include_index:
+            column_names = list(
+                set(column_names) | set(PreservedIndexColumnsKeys)
+            )
+
         state_dict = self._get_state_()
         state_dict["frame_dataset"] = self.frame_dataset.select_columns(
             column_names=column_names, new_fingerprint=new_fingerprint
         )
-        ret = RODataset.__new__(RODataset)
+
+        ret = type(self).__new__(type(self))
         ret.__dict__.update(state_dict)
         return ret
 
@@ -245,7 +291,7 @@ class RODataset(TorchDataset):
         indices_cache_file_name: str | None = None,
         writer_batch_size: int = 1000,
         new_fingerprint: str | None = None,
-    ) -> RODataset:
+    ) -> Self:
         """Select a subset of the dataset based on indices.
 
         This method is similar to the `select` method in Hugging Face
@@ -280,7 +326,7 @@ class RODataset(TorchDataset):
             writer_batch_size=writer_batch_size,
             new_fingerprint=new_fingerprint,
         )
-        ret = RODataset.__new__(RODataset)
+        ret = type(self).__new__(type(self))
         ret.__dict__.update(state_dict)
         return ret
 
@@ -316,6 +362,50 @@ class RODataset(TorchDataset):
     def __getitem__(self, index: int | slice | list[int] | str) -> dict | list:
         """Get the frame data at the specified index.
 
+        The returned data will be transformed if a transform is registered
+        using the `set_transform` method. If no transform is registered,
+        the raw frame data will be returned.
+
+        Args:
+            index (int | slice | list[int] | str): The index of the frame
+                data to retrieve. If `index` is a slice, it returns
+                a dict with values of list type.
+                If `index` is a string, it is treated as a column name
+                and returns the data for that column. Note that string
+                index will load the entire column data, which may
+                consume a lot of memory if the column is large.
+
+        Returns:
+            dict | list: The frame data at the specified index.
+                if `index` is a string, returns the data for that column.
+                Otherwise, returns a dict with the frame data.
+        """
+
+        ret: dict | list = self.__getitem_no_transform__(index)
+        if self._transform is not None:
+            # apply transform if available
+            if isinstance(ret, list):
+                raise TypeError(
+                    "Transform is not supported for list type data. "
+                    "Please use list or int index type instead of "
+                    "string index."
+                )
+            ret = self._transform(ret)
+        return ret
+
+    @overload
+    def __getitem_no_transform__(
+        self, index: int | slice | list[int]
+    ) -> dict: ...
+
+    @overload
+    def __getitem_no_transform__(self, index: str) -> list[Any]: ...
+
+    def __getitem_no_transform__(
+        self, index: int | slice | list[int] | str
+    ) -> dict | list:
+        """Get the frame data at the specified index.
+
         Args:
             index (int | slice | list[int] | str): The index of the frame
                 data to retrieve. If `index` is a slice, it returns
@@ -335,6 +425,11 @@ class RODataset(TorchDataset):
         if self.meta_index2meta:
             ret = self.convert_meta_index2meta(data=ret, column_name=index)  # type: ignore
         return ret
+
+    def make_iter(self) -> Iterable[dict]:
+        """Create an iterator over the dataset."""
+        for i in range(len(self)):
+            yield self[i]
 
     @overload
     def convert_meta_index2meta(
@@ -448,6 +543,33 @@ class RODataset(TorchDataset):
         """Get the dataset format version of loaded dataset."""
         return self._dataset_format_version
 
+    def __getitems__(self, keys: list[int]) -> list:
+        """Get a batch using list of index.
+
+        Unlike __getitem__, this method returns a list of rows
+        where each row is a dictionary of column names and their
+        corresponding values for that index.
+
+        Args:
+            keys (list[int]): A list of indices to retrieve from the dataset.
+
+        """
+        batch = self.__getitem_no_transform__(keys)
+        n_examples = len(batch[next(iter(batch))])
+        if self._transform is not None:
+            ret = [
+                self._transform(
+                    {col: array[i] for col, array in batch.items()}
+                )
+                for i in range(n_examples)
+            ]
+        else:
+            ret = [
+                {col: array[i] for col, array in batch.items()}
+                for i in range(n_examples)
+            ]
+        return ret
+
 
 class ROMultiRowDataset(RODataset):
     """A dataset that returns multiple rows for each index.
@@ -511,18 +633,38 @@ class ROMultiRowDataset(RODataset):
         ret._set_row_sampler(row_sampler)
         return ret
 
-    def __getitem__(self, index: int | slice | list[int]) -> dict:
-        if isinstance(index, int):
-            cur_row = super().__getitem__(index)
-            for col_name, idx_rows in self._row_sampler.sample_row_idx(
-                self.index_dataset, index
-            ).items():
-                col_dataset = self._column_datasets[col_name]
-                cur_row[col_name] = [
-                    col_dataset[idx][col_name] if idx is not None else None
-                    for idx in idx_rows
-                ]
+    def __getitem_no_transform__(self, index: int | slice | list[int]) -> dict:
+        cached_index_dataset = CachedIndexDataset(self.index_dataset)
+        # cached_index_dataset = self.index_dataset
 
+        def fast_column_get(col_name: str, idx_rows: list[int | None]):
+            col_dataset = self._column_datasets[col_name]
+            not_none_idx_rows = []
+            not_none_idx_row_pos = []
+            non_idx_row_pos = []
+            for i, idx in enumerate(idx_rows):
+                if idx is not None:
+                    not_none_idx_rows.append(idx)
+                    not_none_idx_row_pos.append(i)
+                else:
+                    non_idx_row_pos.append(i)
+
+            not_none_row = col_dataset[not_none_idx_rows][col_name]
+            tmp_dict = {
+                i: val
+                for i, val in zip(
+                    not_none_idx_row_pos, not_none_row, strict=True
+                )
+            }
+            return [tmp_dict.get(i, None) for i in range(len(idx_rows))]
+
+        if isinstance(index, int):
+            cur_row = super().__getitem_no_transform__(index)
+            # update column that needs multi-row sampling
+            for col_name, idx_rows in self._row_sampler.sample_row_idx(
+                cached_index_dataset, index
+            ).items():
+                cur_row[col_name] = fast_column_get(col_name, idx_rows)
             return cur_row
         else:
             if isinstance(index, slice):
@@ -532,21 +674,40 @@ class ROMultiRowDataset(RODataset):
             assert isinstance(index, list), (
                 "Index must be an int, slice, or list of ints."
             )
-            cur_rows = super().__getitem__(index)
+            cur_rows = super().__getitem_no_transform__(index)
+            # update column that needs multi-row sampling
             new_rows = {k: [] for k in self._row_sampler.column_rows_keys}
+
+            # for cur_idx in index:
+            #     for col_name, idx_rows in self._row_sampler.sample_row_idx(
+            #         cached_index_dataset, cur_idx
+            #     ).items():
+            #         new_rows[col_name].append(
+            #             fast_column_get(col_name, idx_rows)
+            #         )
+
             for cur_idx in index:
                 for col_name, idx_rows in self._row_sampler.sample_row_idx(
-                    self.index_dataset, cur_idx
+                    cached_index_dataset, cur_idx
                 ).items():
-                    col_dataset = self._column_datasets[col_name]
-                    new_rows[col_name].append(
-                        [
-                            col_dataset[idx][col_name]
-                            if idx is not None
-                            else None
-                            for idx in idx_rows
-                        ]
-                    )
+                    new_rows[col_name].append(idx_rows)
+
+            for k, v in new_rows.items():
+                flattened_rows = []
+                [flattened_rows.extend(row) for row in v]
+                flattened_rows = fast_column_get(k, flattened_rows)
+                cnt = 0
+                for i in range(len(v)):
+                    v[i] = flattened_rows[cnt : cnt + len(v[i])]
+                    cnt += len(v[i])
+                new_rows[k] = v
+
             for k in cur_rows:
                 cur_rows[k] = new_rows.get(k, cur_rows[k])
             return cur_rows
+
+    def __getitem__(self, index: int | slice | list[int]) -> dict:
+        ret = self.__getitem_no_transform__(index)
+        if self._transform is not None:
+            ret = self._transform(ret)
+        return ret

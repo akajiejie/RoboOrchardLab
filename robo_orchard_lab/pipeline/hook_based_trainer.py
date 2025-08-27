@@ -154,7 +154,7 @@ PipelineHookOrConfigType = PipelineHooksConfig | PipelineHooks
 
 
 class HookBasedTrainer:
-    """A trainer class that uses hooks to manage the training process.
+    """An NN trainer class that uses hooks to manage the training process.
 
     The data loader, model, optimizer, and learning rate scheduler are
     prepared using the `Accelerator` instance, which provides
