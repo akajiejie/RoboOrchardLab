@@ -55,6 +55,7 @@ def main(args, accelerator):
     build_model = config.build_model
     build_dataset = config.build_dataset
     build_optimizer = config.build_optimizer
+    build_processor = config.build_processor
     config = config.config
 
     if args.kwargs is not None:
@@ -66,6 +67,13 @@ def main(args, accelerator):
 
     if accelerator.is_main_process:
         logger.info("\n" + json.dumps(config, indent=4))
+
+    processor = build_processor(config)
+    with open(
+        os.path.join(args.workspace, f"robotwin2_0_processor.json"),
+        "w",
+    ) as fh:
+        fh.write(processor.cfg.model_dump_json(indent=4))
 
     model = build_model(config)
     # save model config
@@ -125,11 +133,12 @@ def main(args, accelerator):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--workspace", type=str, default="./workspace")
-    parser.add_argument("--config", type=str, default="./config_bip3d_det.py")
+    parser.add_argument("--config", type=str, default="./config_sem_robotwin.py")
     parser.add_argument("--kwargs", type=str, default=None)
     args = parser.parse_args()
 
     workspace_root = args.workspace
+    os.makedirs(workspace_root, exist_ok=True)
     accelerator = Accelerator(
         step_scheduler_with_optimizer=False,
         project_config=ProjectConfiguration(
