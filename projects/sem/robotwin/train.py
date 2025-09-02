@@ -70,7 +70,7 @@ def main(args, accelerator):
 
     processor = build_processor(config)
     with open(
-        os.path.join(args.workspace, f"robotwin2_0_processor.json"),
+        os.path.join(args.workspace, "robotwin2_0_processor.json"),
         "w",
     ) as fh:
         fh.write(processor.cfg.model_dump_json(indent=4))
@@ -133,7 +133,9 @@ def main(args, accelerator):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--workspace", type=str, default="./workspace")
-    parser.add_argument("--config", type=str, default="./config_sem_robotwin.py")
+    parser.add_argument(
+        "--config", type=str, default="./config_sem_robotwin.py"
+    )
     parser.add_argument("--kwargs", type=str, default=None)
     args = parser.parse_args()
 

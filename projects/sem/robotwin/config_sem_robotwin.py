@@ -404,8 +404,6 @@ def build_model(config):
 
 
 def build_transforms(config):
-    import torch
-
     from robo_orchard_lab.dataset.robotwin.transforms import (
         AddItems,
         AddScaleShift,
@@ -444,10 +442,7 @@ def build_transforms(config):
         ],
     )
     to_tensor = dict(type=ToTensor)
-    projection_mat = dict(
-        type=GetProjectionMat,
-        target_coordinate="base"
-    )
+    projection_mat = dict(type=GetProjectionMat, target_coordinate="base")
     convert_dtype = dict(
         type=ConvertDataType,
         convert_map=dict(
@@ -456,7 +451,7 @@ def build_transforms(config):
             image_wh="float32",
             projection_mat="float32",
             embodiedment_mat="float32",
-        )
+        ),
     )
 
     if config["scale_shift_version"] == "default":
@@ -496,10 +491,7 @@ def build_transforms(config):
     else:
         raise NotImplementedError
 
-    kinematics = dict(
-        type=DualArmKinematics,
-        urdf=config["urdf"]
-    )
+    kinematics = dict(type=DualArmKinematics, urdf=config["urdf"])
     scale_shift = dict(
         type=AddScaleShift,
         scale_shift=scale_shift_list,
@@ -538,7 +530,7 @@ def build_transforms(config):
             "kinematics",
             "text",
             "uuid",
-        ]
+        ],
     )
     train_transforms = [
         add_data_relative_items,
@@ -626,11 +618,11 @@ def build_optimizer(config, model):
 
 
 def build_processor(config):
+    from robo_orchard_lab.dataset.robotwin.transforms import UnsqueezeBatch
     from robo_orchard_lab.models.sem_modules import (
         SEMProcessor,
         SEMProcessorCfg,
     )
-    from robo_orchard_lab.dataset.robotwin.transforms import UnsqueezeBatch
 
     transforms = build_transforms(config)[1]
     transforms.append(dict(type=UnsqueezeBatch))

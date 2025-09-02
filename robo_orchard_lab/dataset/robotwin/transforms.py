@@ -23,12 +23,30 @@ import torch
 from pytorch3d.transforms import matrix_to_quaternion
 
 __all__ = [
+    "AddItems",
+    "AddScaleShift",
+    "JointStateNoise",
     "SimpleStateSampling",
     "Resize",
     "ToTensor",
+    "ItemSelection",
     "DualArmKinematics",
     "GetProjectionMat",
+    "UnsqueezeBatch",
 ]
+
+
+class AddItems:
+    def __init__(self, to_numpy=True, **kwargs):
+        self.items = copy.deepcopy(kwargs)
+        for k, v in self.items.items():
+            if to_numpy and not isinstance(v, np.ndarray):
+                self.items[k] = np.array(v)
+
+    def __call__(self, data):
+        for k, v in self.items.items():
+            data[k] = copy.deepcopy(v)
+        return data
 
 
 class AddScaleShift:
@@ -217,9 +235,13 @@ class ConvertDataType:
 
     def __call__(self, data):
         for data_name, dtype in self.convert_map.items():
+            if isinstance(data[data_name], list):
+                data[data_name] = torch.tensor(data[data_name])
             if isinstance(data[data_name], np.ndarray):
                 data[data_name] = data[data_name].astype(dtype)
             elif isinstance(data[data_name], torch.Tensor):
+                if isinstance(dtype, str):
+                    dtype = getattr(torch, dtype)
                 data[data_name] = data[data_name].to(dtype)
             else:
                 raise TypeError(
@@ -428,4 +450,14 @@ class GetProjectionMat:
             embodiedment_mat = data["T_base2ego"]
         data["projection_mat"] = projection_mat
         data["embodiedment_mat"] = embodiedment_mat
+        return data
+
+
+class UnsqueezeBatch:
+    def __call__(self, data):
+        for k, v in data.items():
+            if isinstance(v, (torch.Tensor, np.ndarray)):
+                data[k] = v[None]
+            else:
+                data[k] = [v]
         return data
