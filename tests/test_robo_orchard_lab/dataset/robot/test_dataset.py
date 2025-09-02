@@ -21,8 +21,6 @@ from typing import Generator
 import datasets as hg_datasets
 import pytest
 import torch
-from sqlalchemy import select
-from sqlalchemy.orm import Session
 
 from robo_orchard_lab.dataset.datatypes import (
     BatchJointsState,
@@ -45,6 +43,7 @@ from robo_orchard_lab.dataset.robot.packaging import (
     RobotData,
     TaskData,
 )
+from robo_orchard_lab.dataset.robot.re_packing import repack_dataset
 from robo_orchard_lab.dataset.robot.row_sampler import (
     DeltaTimestampSamplerConfig,
 )
@@ -315,16 +314,12 @@ class TestDataset:
     def test_check_db_engine(self, example_dataset_path: str):
         dataset = RODataset(dataset_path=example_dataset_path)
         assert dataset.db_engine is not None
-        with Session(dataset.db_engine) as session:
-            # list all episodes by ascending order of id
-            total_frame_num = 0
-            for episode in session.scalars(
-                select(Episode).order_by(Episode.index)
-            ).all():
-                print("episode:", episode)
-                assert episode.frame_num is not None
-                assert episode.dataset_begin_index == total_frame_num
-                total_frame_num += episode.frame_num
+        total_frame_num = 0
+        for episode in dataset.iterate_meta(meta_type=Episode, ordered=True):
+            print("episode:", episode)
+            assert episode.frame_num is not None
+            assert episode.dataset_begin_index == total_frame_num
+            total_frame_num += episode.frame_num
 
     def test_check_frame_db(self, example_dataset_path: str):
         dataset = RODataset(dataset_path=example_dataset_path)
@@ -629,6 +624,58 @@ class TestRoboTwinDataset:
             row["timestamp_max"],
         )
         print("left_camera intrinsic: ", row["left_camera"].intrinsic_matrices)
+
+    @pytest.mark.parametrize("columns", [None, ["left_camera"]])
+    def test_repack(
+        self,
+        ROBO_ORCHARD_TEST_WORKSPACE: str,
+        tmp_local_folder: str,
+        columns: list[str] | None,
+    ):
+        path = os.path.join(
+            ROBO_ORCHARD_TEST_WORKSPACE,
+            "robo_orchard_workspace/datasets/robotwin/ro_dataset",
+        )
+        dataset = RODataset(dataset_path=path, meta_index2meta=True)
+        new_dataset_dir = os.path.join(
+            tmp_local_folder,
+            "test_repack_"
+            + "".join(random.choices(string.ascii_lowercase, k=8)),
+        )
+        repack_idx_list = [0, 1, 2, 3, 4] + [500 + i for i in range(20)]
+
+        repack_dataset(
+            source_dataset=dataset,
+            target_path=new_dataset_dir,
+            frame_indices=repack_idx_list,
+            force_overwrite=True,
+            columns=columns,
+        )
+
+        repacked_dataset = RODataset(
+            dataset_path=new_dataset_dir, meta_index2meta=True
+        )
+        for i, ori_id in enumerate(repack_idx_list):
+            original_row = dataset[ori_id]
+            repacked_row = repacked_dataset[i]
+            if columns is None:
+                assert original_row["joints"] == repacked_row["joints"]
+            else:
+                if "joints" not in columns:
+                    assert "joints" not in repacked_row
+                assert "left_camera" in columns
+                left_camera = original_row["left_camera"]
+                repacked_left_camera = repacked_row["left_camera"]
+                assert (
+                    left_camera.timestamps == repacked_left_camera.timestamps
+                )
+
+            assert (
+                original_row["instruction"].md5
+                == repacked_row["instruction"].md5
+            )
+            assert original_row["task"].md5 == repacked_row["task"].md5
+            assert original_row["robot"].md5 == repacked_row["robot"].md5
 
 
 class TestMultiRowDataset:

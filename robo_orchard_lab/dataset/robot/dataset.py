@@ -77,11 +77,23 @@ class RODataset(TorchDataset):
     """
 
     frame_dataset: HFDataset
-    """The Hugging Face Dataset object containing the frame data."""
+    """The Hugging Face Dataset object containing the frame data.
+
+    The dataset should not be shuffled or modified after loading, as the
+    metadata database relies on the index columns to retrieve the episode-level
+    information.
+
+    """
     db_engine: Engine
     """The SQLAlchemy engine for the meta database"""
     index_dataset: HFDataset
-    """The same as `frame_dataset`, but only contains the preserved index columns."""  # noqa: E501
+    """The same as `frame_dataset`, but only contains the preserved index columns.
+
+    The dataset should not be shuffled or modified after loading, as the
+    metadata database relies on the index columns to retrieve the episode-level
+    information.
+    """  # noqa: E501
+
     meta_index2meta: bool
     """Whether to convert the index-based metadata to actual metadata
     objects when accessing the dataset."""
@@ -537,6 +549,17 @@ class RODataset(TorchDataset):
                 if ret is not None:
                     make_transient(ret)
                 return ret
+
+    def iterate_meta(
+        self, meta_type: type[MetaType], ordered: bool = True
+    ) -> Iterable[MetaType]:
+        """Create an iterator over the meta information in the dataset."""
+        with Session(self.db_engine) as session:
+            stmt = select(meta_type)
+            if ordered:
+                stmt = stmt.order_by(meta_type.index)
+            for data in session.scalars(stmt).all():
+                yield data
 
     @property
     def dataset_format_version(self) -> str | None:
