@@ -64,9 +64,11 @@ class RePackingEpisodeHelper(EpisodePackaging):
 
     def generate_episode_meta(self) -> EpisodeMeta:
         frame_start = self.frame_index_list[0]
-        row = self.dataset[frame_start]
-        orm_robot: Robot = row["robot"]
-        orm_task: Task = row["task"]
+        row = self.dataset.index_dataset[frame_start]
+        orm_robot: Robot = self.dataset.get_meta(Robot, row["robot_index"])
+        assert orm_robot is not None
+        orm_task: Task = self.dataset.get_meta(Task, row["task_index"])
+        assert orm_task is not None
         robot: RobotData = RobotData(
             name=orm_robot.name,
             urdf_content=orm_robot.urdf_content,
@@ -88,19 +90,19 @@ class RePackingEpisodeHelper(EpisodePackaging):
             if key not in preserved_columns
         ]
 
-        for i in self.frame_index_list:
-            row = self.dataset.frame_dataset[i]
-            if row["episode_index"] != self._current_episode_index:
-                raise ValueError(
-                    "The frames do not belong to the same episode."
-                )
+        # cache all instructions for faster access
+        index_rows = self.dataset.index_dataset[self.frame_index_list]
+        all_instruction = self.dataset.get_meta(
+            Instruction, index_rows["instruction_index"]
+        )
+
+        for i, idx in enumerate(self.frame_index_list):
+            row = self.dataset.frame_dataset[idx]
             instruction_index = row["instruction_index"]
-            orm_instruction = self.dataset.get_meta(
-                Instruction, instruction_index
-            )
+            orm_instruction = all_instruction[i]
             if orm_instruction is None:
                 raise RuntimeError(
-                    f"Instruction not found for frame index {i} "
+                    f"Instruction not found for frame index {idx} "
                     f"with instruction_index {instruction_index}"
                 )
             features = {key: row[key] for key in keep_columns}

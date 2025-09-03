@@ -14,10 +14,19 @@
 # implied. See the License for the specific language governing
 # permissions and limitations under the License.
 from __future__ import annotations
+import bisect
 import json
 import os
 from contextlib import contextmanager
-from typing import Any, Callable, Iterable, TypeAlias, TypeVar, overload
+from typing import (
+    Any,
+    Callable,
+    Iterable,
+    Literal,
+    TypeAlias,
+    TypeVar,
+    overload,
+)
 
 import fsspec
 import torch
@@ -30,6 +39,8 @@ from sqlalchemy import URL, Engine, select
 from sqlalchemy.orm import Session, make_transient
 from typing_extensions import Self
 
+# import all datatypes and features
+from robo_orchard_lab.dataset.datatypes import *  # noqa: F403,F401
 from robo_orchard_lab.dataset.robot.columns import (
     PreservedIndexColumnsKeys,
 )
@@ -46,11 +57,13 @@ from robo_orchard_lab.dataset.robot.row_sampler import (
     MultiRowSamplerConfig,
 )
 
-__all__ = ["RODataset", "ROMultiRowDataset"]
+__all__ = ["RODataset", "ROMultiRowDataset", "ConcatRODataset"]
 
 MetaType = TypeVar("MetaType", Episode, Instruction, Robot, Task)
 """A type variable for metadata types in the RoboOrchard dataset."""
-
+MetaIndexKeyType = Literal[
+    "episode_index", "task_index", "robot_index", "instruction_index"
+]
 TorchDataset: TypeAlias = torch.utils.data.Dataset
 
 
@@ -126,6 +139,24 @@ class RODataset(TorchDataset):
         self.db_engine = self._load_db(dataset_path)
 
         self._transform: Callable[[dict], dict] | None = None
+
+    def __repr__(self) -> str:
+        # ret = "RODataset(num_rows={})".format(len(self))
+        dict_info = {}
+        dict_info["num_rows"] = len(self)
+        dict_info["columns"] = list(self.frame_dataset.column_names)
+        if self.meta_index2meta:
+            # change all columns with index to meta
+            for col in (
+                "episode",
+                "task",
+                "robot",
+                "instruction",
+            ):
+                col_index = f"{col}_index"
+                dict_info["columns"].remove(col_index)
+                dict_info["columns"].append(col)
+        return f"RODataset({dict_info})"
 
     def _get_state_(self) -> dict:
         """Get all internal state of the dataset.
@@ -205,6 +236,46 @@ class RODataset(TorchDataset):
             yield self
         finally:
             self.set_transform(old_transform)
+
+    def rename_columns(
+        self,
+        column_mapping: dict[str, str],
+        new_fingerprint: str | None = None,
+    ) -> Self:
+        """Rename several columns in the dataset.
+
+        Args:
+            column_mapping (dict[str, str]): A dictionary mapping the old
+                column name to the new column name. The dictionary should
+                contain exactly one key-value pair.
+            new_column_name (str): The new name of the column.
+
+        Returns:
+            Self: A new instance of type(self) with the renamed column.
+        """
+
+        # check that the old and new columns does not contain index columns
+        reserved_keys = set(PreservedIndexColumnsKeys)
+        for k, v in column_mapping.items():
+            if k in reserved_keys:
+                raise ValueError(
+                    f"Cannot rename index column {k}. "
+                    f"Index columns are: {PreservedIndexColumnsKeys}"
+                )
+            if v in reserved_keys:
+                raise ValueError(
+                    f"Cannot rename to index column {v}. "
+                    f"Index columns are: {PreservedIndexColumnsKeys}"
+                )
+
+        state_dict = self._get_state_()
+        state_dict["frame_dataset"] = self.frame_dataset.rename_columns(
+            column_mapping=column_mapping,
+            new_fingerprint=new_fingerprint,
+        )
+        ret = type(self).__new__(type(self))
+        ret.__dict__.update(state_dict)
+        return ret
 
     def select_columns(
         self,
@@ -331,13 +402,15 @@ class RODataset(TorchDataset):
                 fingerprint, and the transform arguments.
         """
         state_dict = self._get_state_()
-        state_dict["frame_dataset"] = self.frame_dataset.select(
-            indices=indices,
-            keep_in_memory=keep_in_memory,
-            indices_cache_file_name=indices_cache_file_name,
-            writer_batch_size=writer_batch_size,
-            new_fingerprint=new_fingerprint,
-        )
+        for k, v in state_dict.items():
+            if isinstance(v, HFDataset):
+                state_dict[k] = v.select(
+                    indices=indices,
+                    keep_in_memory=keep_in_memory,
+                    indices_cache_file_name=indices_cache_file_name,
+                    writer_batch_size=writer_batch_size,
+                    new_fingerprint=new_fingerprint,
+                )
         ret = type(self).__new__(type(self))
         ret.__dict__.update(state_dict)
         return ret
@@ -435,7 +508,10 @@ class RODataset(TorchDataset):
 
         ret: dict | list = self.frame_dataset[index]
         if self.meta_index2meta:
-            ret = self.convert_meta_index2meta(data=ret, column_name=index)  # type: ignore
+            if isinstance(ret, dict):
+                ret = self.convert_meta_index2meta(data=ret)
+            else:
+                ret = self.convert_meta_index2meta(data=ret, column_name=index)  # type: ignore # noqa: E501
         return ret
 
     def make_iter(self) -> Iterable[dict]:
@@ -450,11 +526,13 @@ class RODataset(TorchDataset):
 
     @overload
     def convert_meta_index2meta(
-        self, data: list[Any], column_name: str
+        self, data: list[Any], column_name: MetaIndexKeyType
     ) -> list[Any]: ...
 
     def convert_meta_index2meta(
-        self, data: dict[str, Any] | list, column_name: str | None = None
+        self,
+        data: dict[str, Any] | list,
+        column_name: MetaIndexKeyType | None = None,
     ) -> dict | list:
         """Convert the metadata index in `data` to actual metadata objects.
 
@@ -463,8 +541,8 @@ class RODataset(TorchDataset):
                 with index-based metadata, it will be converted to actual
                 metadata objects. If `data` is a list, it will be converted
                 to a list of metadata objects.
-            column_name (str | None, optional): The name of the column
-                to convert. If `data` is a list, this argument must be
+            column_name (MetaIndexKeyType | None, optional): The name of the
+                column to convert. If `data` is a list, this argument must be
                 provided to convert the index-based metadata to actual
                 metadata objects. Defaults to None.
 
@@ -527,11 +605,11 @@ class RODataset(TorchDataset):
 
         if isinstance(index, (list, Column)):
             # get all not None value
-            non_none_index = [i for i in index if i is not None]
+            non_none_index = set([i for i in index if i is not None])
             if len(non_none_index) == 0:
                 return [None for _ in index]
             # If index is a list, retrieve multiple metadata objects
-            stmt = select(meta_type).where(meta_type.index.in_(index))
+            stmt = select(meta_type).where(meta_type.index.in_(non_none_index))
             with Session(self.db_engine) as session:
                 ret = session.scalars(stmt).all()
                 # make transient to avoid session issues
@@ -551,14 +629,27 @@ class RODataset(TorchDataset):
                 return ret
 
     def iterate_meta(
-        self, meta_type: type[MetaType], ordered: bool = True
+        self,
+        meta_type: type[MetaType],
+        ordered: bool = True,
+        transient: bool = True,
     ) -> Iterable[MetaType]:
-        """Create an iterator over the meta information in the dataset."""
+        """Create an iterator over the meta information in the dataset.
+
+        Args:
+            meta_type (type[MetaType]): The type of metadata to iterate over.
+            ordered (bool, optional): Whether to iterate in order of index.
+                Defaults to True.
+            transient (bool, optional): Whether to make the metadata objects
+                transient to avoid session issues. Defaults to True.
+        """
         with Session(self.db_engine) as session:
             stmt = select(meta_type)
             if ordered:
                 stmt = stmt.order_by(meta_type.index)
             for data in session.scalars(stmt).all():
+                if transient:
+                    make_transient(data)
                 yield data
 
     @property
@@ -658,7 +749,6 @@ class ROMultiRowDataset(RODataset):
 
     def __getitem_no_transform__(self, index: int | slice | list[int]) -> dict:
         cached_index_dataset = CachedIndexDataset(self.index_dataset)
-        # cached_index_dataset = self.index_dataset
 
         def fast_column_get(col_name: str, idx_rows: list[int | None]):
             col_dataset = self._column_datasets[col_name]
@@ -733,4 +823,184 @@ class ROMultiRowDataset(RODataset):
         ret = self.__getitem_no_transform__(index)
         if self._transform is not None:
             ret = self._transform(ret)
+        return ret
+
+
+class ConcatRODataset(TorchDataset):
+    """Concatenate multiple RODataset instances into a single dataset.
+
+    This class extends `RODataset` to support concatenation of multiple
+    datasets. It provides a unified interface to access data from all
+    concatenated datasets.
+
+    Args:
+        datasets (list[RODataset]): A list of RODataset instances to
+            concatenate.
+    """
+
+    dataset_index_key: str = "dataset_index"
+
+    def __init__(self, datasets: list[RODataset]):
+        if len(datasets) == 0:
+            raise ValueError("At least one dataset must be provided.")
+
+        features = datasets[0].features
+        for ds in datasets[1:]:
+            if ds.features != features:
+                raise ValueError(
+                    "All datasets must have the same features "
+                    "to be concatenated."
+                )
+            if ds.meta_index2meta != datasets[0].meta_index2meta:
+                raise ValueError(
+                    "All datasets must have the same meta_index2meta "
+                    "to be concatenated."
+                )
+            if ds.transform != datasets[0].transform:
+                raise ValueError(
+                    "All datasets must have the same transform "
+                    "to be concatenated."
+                )
+            if self.dataset_index_key in ds.features:
+                raise KeyError(
+                    f"{self.dataset_index_key} is a reserved key in "
+                    "ConcatRODataset. Please rename the column in the "
+                    "original dataset."
+                )
+        self.datasets = datasets
+        self.cumulative_sizes = self._compute_cumulative_sizes()
+
+    @property
+    def meta_index2meta(self) -> bool:
+        return self.datasets[0].meta_index2meta
+
+    @meta_index2meta.setter
+    def meta_index2meta(self, value: bool):
+        for ds in self.datasets:
+            ds.meta_index2meta = value
+
+    @property
+    def features(self) -> Features:
+        """Get the features of the concatenated dataset.
+
+        Features are the schema of the original dataset without transforms.
+        """
+        return self.datasets[0].features
+
+    def _compute_cumulative_sizes(self) -> list[int]:
+        """Compute the cumulative sizes of the concatenated datasets."""
+        cumulative_sizes = []
+        total = 0
+        for ds in self.datasets:
+            total += len(ds)
+            cumulative_sizes.append(total)
+        return cumulative_sizes
+
+    def __len__(self):
+        return self.cumulative_sizes[-1]
+
+    @property
+    def transform(self) -> Callable[[dict], dict] | None:
+        return self.datasets[0].transform
+
+    def set_transform(self, transform: Callable[[dict], dict] | None):
+        for ds in self.datasets:
+            ds.set_transform(transform)
+
+    @contextmanager
+    def transform_context(self, transform: Callable[[dict], dict] | None):
+        """Context manager to temporarily set a transform for the dataset.
+
+        This is useful for applying a transform only within a specific
+        context, without permanently changing the dataset's transform.
+        """
+
+        old_transform = self.transform
+        self.set_transform(transform)
+        try:
+            yield self
+        finally:
+            self.set_transform(old_transform)
+
+    def _map_index_to_dataset(self, idx: int) -> tuple[int, int]:
+        if idx < 0:
+            if -idx > len(self):
+                raise ValueError("Index out of range.")
+            idx = len(self) + idx
+        dataset_idx = bisect.bisect_right(self.cumulative_sizes, idx)
+        if dataset_idx == 0:
+            sample_idx = idx
+        else:
+            sample_idx = idx - self.cumulative_sizes[dataset_idx - 1]
+        return dataset_idx, sample_idx
+
+    def __getitem__(self, index: int | slice | list[int]) -> dict:
+        if isinstance(index, slice):
+            index = [
+                i for i in range(index.start, index.stop, index.step or 1)
+            ]
+        # group index by dataset
+        if isinstance(index, int):
+            dataset_idx, sample_idx = self._map_index_to_dataset(index)
+            ret = self.datasets[dataset_idx][sample_idx]
+            ret[self.dataset_index_key] = dataset_idx
+            return ret
+
+        elif isinstance(index, list):
+            grouped_index: dict[int, list[int]] = {}
+            # each tuple: dataset_idx, offset_in_dataset
+            grouped_index2origin: list[tuple[int, int]] = []
+
+            for idx in index:
+                dataset_idx, sample_idx = self._map_index_to_dataset(idx)
+                if dataset_idx not in grouped_index:
+                    grouped_index[dataset_idx] = []
+                offset = len(grouped_index[dataset_idx])
+                grouped_index[dataset_idx].append(sample_idx)
+                grouped_index2origin.append((dataset_idx, offset))
+            # get data from each dataset
+            batch_rows = {}
+            for dataset_idx, sample_indices in grouped_index.items():
+                batch_rows[dataset_idx] = self.datasets[dataset_idx][
+                    sample_indices
+                ]
+
+            # reorder the batch rows to match the original index order
+            ret = {}
+            ret[self.dataset_index_key] = []
+
+            for dataset_idx, offset in grouped_index2origin:
+                multi_row_dict: dict = batch_rows[dataset_idx]
+                for k in multi_row_dict.keys():
+                    if k not in ret:
+                        ret[k] = []
+                    ret[k].append(multi_row_dict[k][offset])
+                ret[self.dataset_index_key].append(dataset_idx)
+            return ret
+        else:
+            raise TypeError("Index must be an int, slice, or list of ints.")
+
+    def __getitems__(self, index: list[int]) -> list:
+        grouped_index: dict[int, list[int]] = {}
+        # each tuple: dataset_idx, sample_idx
+        grouped_index2origin: list[tuple[int, int]] = []
+
+        for idx in index:
+            dataset_idx, sample_idx = self._map_index_to_dataset(idx)
+            if dataset_idx not in grouped_index:
+                grouped_index[dataset_idx] = []
+            offset = len(grouped_index[dataset_idx])
+            grouped_index[dataset_idx].append(sample_idx)
+            grouped_index2origin.append((dataset_idx, offset))
+        # get data from each dataset
+        batch_rows = {}
+        for dataset_idx, sample_indices in grouped_index.items():
+            batch_rows[dataset_idx] = self.datasets[dataset_idx].__getitems__(
+                sample_indices
+            )
+        ret = []
+        for dataset_idx, offset in grouped_index2origin:
+            row = batch_rows[dataset_idx][offset]
+            row[self.dataset_index_key] = dataset_idx
+            ret.append(row)
         return ret

@@ -305,6 +305,7 @@ class DeltaTimestampSampler(MultiRowSampler):
         """
 
         def check_idx(row: dict, idx: int) -> None:
+            # Not used because select will change idx.
             if row["index"] != idx:
                 raise ValueError(
                     f"Row index {row['index']} does not match the expected "
@@ -314,7 +315,6 @@ class DeltaTimestampSampler(MultiRowSampler):
         if cache is None:
             cache = IndexFrameCache()
         cur_row = index_dataset[index]
-        check_idx(cur_row, index)
         cache.add_frame(index, cur_row)
         cur_episode = cur_row["episode_index"]
         cur_ts_delta_max = cur_row["timestamp_max"] + self._ts_delta_max
@@ -324,7 +324,6 @@ class DeltaTimestampSampler(MultiRowSampler):
         prev_idx = index - 1
         while prev_idx >= 0:
             prev_row = index_dataset[prev_idx]
-            check_idx(prev_row, prev_idx)
             prev_row_ts_min = prev_row["timestamp_min"]
             prev_row_ts_max = prev_row["timestamp_max"]
             if prev_row_ts_min is None or prev_row_ts_max is None:
@@ -343,7 +342,6 @@ class DeltaTimestampSampler(MultiRowSampler):
         next_idx = index + 1
         while next_idx < len(index_dataset):
             next_row = index_dataset[next_idx]
-            check_idx(next_row, next_idx)
             next_row_ts_min = next_row["timestamp_min"]
             next_row_ts_max = next_row["timestamp_max"]
             if next_row_ts_min is None or next_row_ts_max is None:

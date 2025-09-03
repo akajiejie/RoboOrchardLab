@@ -26,7 +26,11 @@ from robo_orchard_lab.dataset.datatypes import (
     BatchJointsState,
     BatchJointsStateFeature,
 )
-from robo_orchard_lab.dataset.robot.dataset import RODataset, ROMultiRowDataset
+from robo_orchard_lab.dataset.robot.dataset import (
+    ConcatRODataset,
+    RODataset,
+    ROMultiRowDataset,
+)
 from robo_orchard_lab.dataset.robot.db_orm import (
     Episode,
     Instruction,
@@ -872,7 +876,7 @@ class TestMultiRowDataset:
         )
 
         dataset = ROMultiRowDataset.from_dataset(
-            RODataset(dataset_path=path),
+            RODataset(dataset_path=path, meta_index2meta=index2meta),
             row_sampler=DeltaTimestampSamplerConfig(
                 column_delta_ts={
                     "joints": [0, 0.0 + 0.1],
@@ -907,7 +911,7 @@ class TestMultiRowDataset:
         )
 
         dataset = ROMultiRowDataset.from_dataset(
-            RODataset(dataset_path=path),
+            RODataset(dataset_path=path, meta_index2meta=index2meta),
             row_sampler=DeltaTimestampSamplerConfig(
                 column_delta_ts={
                     "joints": [0, 0.0 + 0.1],
@@ -931,7 +935,7 @@ class TestMultiRowDataset:
         )
 
         dataset = ROMultiRowDataset.from_dataset(
-            RODataset(dataset_path=path),
+            RODataset(dataset_path=path, meta_index2meta=index2meta),
             row_sampler=DeltaTimestampSamplerConfig(
                 column_delta_ts={
                     "joints": [0, 0.0 + 0.1],
@@ -974,3 +978,90 @@ class TestMultiRowDataset:
         for columns in ["index", "joints"]:
             assert multi_row[0][columns] == dataset[idx_list[0]][columns]
             assert multi_row[1][columns] == dataset[idx_list[1]][columns]
+
+
+class TestConcatRODataset:
+    @pytest.mark.parametrize("index2meta", [True, False])
+    def test_concat(self, ROBO_ORCHARD_TEST_WORKSPACE: str, index2meta: bool):
+        path = os.path.join(
+            ROBO_ORCHARD_TEST_WORKSPACE,
+            "robo_orchard_workspace/datasets/robotwin/ro_dataset",
+        )
+
+        dataset = RODataset(dataset_path=path, meta_index2meta=index2meta)
+
+        concat_dataset = ConcatRODataset([dataset, dataset])
+
+        assert len(concat_dataset) == 2 * len(dataset)
+
+        row = concat_dataset[0]
+
+        assert isinstance(row, dict)
+        assert concat_dataset.dataset_index_key in row
+        assert row[concat_dataset.dataset_index_key] == 0
+        if index2meta:
+            assert isinstance(row["episode"], Episode)
+        else:
+            assert isinstance(row["episode_index"], int)
+
+    @pytest.mark.parametrize("index2meta", [True, False])
+    def test_getitems(
+        self, ROBO_ORCHARD_TEST_WORKSPACE: str, index2meta: bool
+    ):
+        path = os.path.join(
+            ROBO_ORCHARD_TEST_WORKSPACE,
+            "robo_orchard_workspace/datasets/robotwin/ro_dataset",
+        )
+        dataset = RODataset(dataset_path=path, meta_index2meta=index2meta)
+
+        concat_dataset = ConcatRODataset([dataset, dataset])
+
+        multi_row = concat_dataset.__getitems__([100, 100 + len(dataset)])
+        assert isinstance(multi_row, list)
+        assert isinstance(multi_row[0]["joints"], BatchJointsState)
+
+        if index2meta:
+            assert isinstance(multi_row[0]["episode"], Episode)
+        else:
+            assert isinstance(multi_row[0]["episode_index"], int)
+
+        assert multi_row[0]["joints"] == multi_row[1]["joints"]
+        assert multi_row[0]["joints"] == dataset[100]["joints"]
+
+    @pytest.mark.parametrize("index2meta", [True, False])
+    def test_getitem(self, ROBO_ORCHARD_TEST_WORKSPACE: str, index2meta: bool):
+        path = os.path.join(
+            ROBO_ORCHARD_TEST_WORKSPACE,
+            "robo_orchard_workspace/datasets/robotwin/ro_dataset",
+        )
+        dataset = RODataset(dataset_path=path, meta_index2meta=index2meta)
+
+        concat_dataset = ConcatRODataset([dataset, dataset])
+
+        multi_row = concat_dataset[1]
+        assert isinstance(multi_row, dict)
+        if index2meta:
+            assert isinstance(multi_row["episode"], Episode)
+        else:
+            assert isinstance(multi_row["episode_index"], int)
+
+        multi_row = concat_dataset[[0]]
+        assert isinstance(multi_row, dict)
+        if index2meta:
+            assert isinstance(multi_row["episode"], list)
+            assert isinstance(multi_row["episode"][0], Episode)
+        else:
+            assert isinstance(multi_row["episode_index"], list)
+            assert isinstance(multi_row["episode_index"][0], int)
+
+        multi_row = concat_dataset[[100, 100 + len(dataset)]]
+        assert isinstance(multi_row, dict)
+        if index2meta:
+            assert isinstance(multi_row["episode"], list)
+            assert isinstance(multi_row["episode"][0], Episode)
+        else:
+            assert isinstance(multi_row["episode_index"], list)
+            assert isinstance(multi_row["episode_index"][0], int)
+
+        assert multi_row["joints"][0] == multi_row["joints"][1]
+        assert multi_row["joints"][0] == dataset[100]["joints"]
