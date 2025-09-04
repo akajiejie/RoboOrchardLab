@@ -25,15 +25,41 @@ from pytorch3d.transforms import matrix_to_quaternion
 __all__ = [
     "AddItems",
     "AddScaleShift",
+    "ConvertDataType",
+    "ImageChannelFlip",
+    "ItemSelection",
     "JointStateNoise",
     "SimpleStateSampling",
     "Resize",
     "ToTensor",
-    "ItemSelection",
     "DualArmKinematics",
     "GetProjectionMat",
     "UnsqueezeBatch",
 ]
+
+
+class IdentityTransform:
+    def __call__(self, data):
+        return data
+
+
+class ImageChannelFlip:
+    def __init__(self, output_channel=None):
+        if output_channel is None:
+            output_channel = [2, 1, 0]
+        self.output_channel = output_channel
+
+    def __call__(self, data):
+        if isinstance(data["imgs"], (list, tuple)):
+            data["imgs"] = [
+                np.ascontiguousarray(x[..., self.output_channel])
+                for x in data["imgs"]
+            ]
+        else:
+            data["imgs"] = np.ascontiguousarray(
+                data["imgs"][..., self.output_channel]
+            )
+        return data
 
 
 class AddItems:
