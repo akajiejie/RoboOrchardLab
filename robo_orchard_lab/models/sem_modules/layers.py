@@ -190,7 +190,10 @@ class RotaryAttention(nn.Module):
 
         q, k = self.apply_position_encode(q, query_pos, k, key_pos)
 
-        attn = torch.einsum("bhnc,bhmc->bhnm", q, k) * self.scale
+        attn = (q @ k.permute(0, 1, 3, 2)) * self.scale
+        # Equivalent Implementation
+        # attn = torch.einsum("bhnc,bhmc->bhnm", q, k) * self.scale
+
         if attn_mask is not None:
             if attn_mask.dim() == 3 and attn_mask.shape[0] == B:
                 attn_mask = attn_mask.unsqueeze(1)
@@ -278,7 +281,11 @@ class JointGraphAttention(nn.Module):
             query_pos = query_pos.tile(B // query_pos.shape[0], 1, 1, 1, 1)
 
         q = q[:, :, :, None] * query_pos
-        attn = torch.einsum("bhnmc,bhmc->bhnm", q, k) * self.scale
+
+        attn = (q * k.unsqueeze(2)).sum(-1) * self.scale
+        # Equivalent Implementation
+        # attn = torch.einsum("bhnmc,bhmc->bhnm", q, k) * self.scale
+
         attn = attn.softmax(dim=-1).type_as(v)
         x = (attn @ v).transpose(1, 2)
         x = x.reshape(B, N, C)
@@ -339,6 +346,7 @@ class UpsampleHead(nn.Module):
         super().__init__()
         self.norm_act_idx = norm_act_idx
         self.upsamples = nn.ModuleList()
+        self.convs = nn.ModuleList()
         self.act_and_norm = nn.ModuleList()
         dims = [input_dim] + dims
         for i, size in enumerate(upsample_sizes):
@@ -349,12 +357,13 @@ class UpsampleHead(nn.Module):
                 )
             else:
                 self.act_and_norm.append(None)
+
             self.upsamples.append(
-                nn.Sequential(
-                    nn.Upsample(size=size, mode="linear", align_corners=True),
-                    nn.Conv1d(dims[i], dims[i + 1], 3, padding=1),
-                )
+                nn.Upsample(
+                    size=(size, 1), mode="bilinear", align_corners=True
+                ),
             )
+            self.convs.append(nn.Conv1d(dims[i], dims[i + 1], 3, padding=1))
 
     def forward(self, x):
         bs, num_joint, num_chunk, state_dims = x.shape
@@ -363,7 +372,7 @@ class UpsampleHead(nn.Module):
             if i in self.norm_act_idx:
                 x = self.act_and_norm[i](x)
             x = x.permute(0, 2, 1)
-            x = layer(x)
+            x = self.convs[i](layer(x.unsqueeze(-1)).squeeze(-1))
             x = x.permute(0, 2, 1)
         x = x.unflatten(0, (bs, num_joint))
         return x
