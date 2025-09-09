@@ -128,6 +128,30 @@ accelerate launch  \
 ```
 
 
+## Deploy
+
+Export ONNX:
+```bash
+cd projects/sem/robotwin
+
+python3 onnx_scripts/export_onnx.py \
+    --config config_sem_robotwin.py \
+    --model model/save/dir \  # ModelMixin export directory, containing model.safetensors and model.config.json
+    --output_path "./test_onnx_model" \
+    --num_joint 14 \  # Exporting models with dynamic dimensions is not currently supported
+    --validate
+```
+Next, the ONNX model can be initialized and invoked as follows:
+```python
+import sys
+from robo_orchard_lab.models.mixin import ModelMixin
+
+sys.path.append("projects/sem/robotwin/onnx_scripts")
+onnx_model = ModelMixin.load_model(output_path, load_weight=False)
+pred_actions = onnx_model(data)
+```
+
+
 ## Experimental Results
 
 Below are the results of the single-task models trained on 100 episodes.

@@ -188,10 +188,7 @@ class RotaryAttention(nn.Module):
         k = k.reshape(B, M, self.num_heads, -1).permute(0, 2, 1, 3)
         v = v.reshape(B, M, self.num_heads, -1).permute(0, 2, 1, 3)  # b,h,m,c
 
-        if query_pos is not None:
-            q = self.position_encoder(q, query_pos)
-        if key_pos is not None:
-            k = self.position_encoder(k, key_pos)
+        q, k = self.apply_position_encode(q, query_pos, k, key_pos)
 
         attn = torch.einsum("bhnc,bhmc->bhnm", q, k) * self.scale
         if attn_mask is not None:
@@ -210,6 +207,13 @@ class RotaryAttention(nn.Module):
         x = self.proj(x)
         x = x + identity
         return x
+
+    def apply_position_encode(self, q, query_pos, k, key_pos):
+        if query_pos is not None:
+            q = self.position_encoder(q, query_pos)
+        if key_pos is not None:
+            k = self.position_encoder(k, key_pos)
+        return q, k
 
 
 class JointGraphAttention(nn.Module):
@@ -310,6 +314,9 @@ class AdaRMSNorm(nn.RMSNorm):
 
     def forward(self, x, c):
         x = super().forward(x)
+        return self.apply_ada_func(x, c)
+
+    def apply_ada_func(self, x, c):
         dims = x.shape[-1]
         ada_scale_shift = self.adaLN_modulation(c).unflatten(-1, (dims, -1))
         if ada_scale_shift.dim() != 4:
