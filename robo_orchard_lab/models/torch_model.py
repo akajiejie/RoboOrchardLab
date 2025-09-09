@@ -13,13 +13,14 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
 # implied. See the License for the specific language governing
 # permissions and limitations under the License.
-
+from __future__ import annotations
 import json
 import logging
 import os
 from typing import Any, TypeVar
 
 import torch
+from accelerate import Accelerator
 from robo_orchard_core.utils.config import (
     ClassConfig,
     ClassInitFromConfigMixin,
@@ -101,8 +102,61 @@ class TorchModelMixin(torch.nn.Module, ClassInitFromConfigMixin):
         super().__init__()
         self.cfg = cfg
 
-    @staticmethod
+        self._accelerate_model_id: int = -1
+
+    @property
+    def accelerate_model_id(self) -> int:
+        """The model index of the prepared model in the 'accelerator' instance.
+
+        This should be set when the model is prepared with
+        `accelerator.prepare()`.
+
+        If not available, it returns -1.
+
+        """
+        return self._accelerate_model_id
+
+    @accelerate_model_id.setter
+    def accelerate_model_id(self, value: int):
+        self._accelerate_model_id = value
+
+    def accelerator_register_all_hooks(
+        self,
+        accelerator: Accelerator,
+    ) -> list[torch.utils.hooks.RemovableHandle]:
+        """Register all necessary hooks to the given Hugging Face Accelerator.
+
+        Args:
+            accelerator (Accelerator): The Hugging Face Accelerator instance.
+        """
+
+        if accelerator.is_main_process is False:
+            logger.info("Not the main process, skip registering hooks.")
+            return []
+
+        model_id = self.accelerate_model_id
+        if model_id < 0:
+            raise ValueError(
+                "Model's accelerate_model_id is not set. "
+                "Ensure accelerate_model_id is set when preparing the model "
+                "with `accelerator.prepare()`."
+            )
+
+        for hook in accelerator._save_model_state_pre_hook.keys():
+            if hook == self.accelerator_save_state_pre_hook:
+                logger.warning(
+                    f"accelerator_save_state_pre_hook of {self}"
+                    " is already registered. Skip registering again."
+                )
+                return []
+        return [
+            accelerator.register_save_state_pre_hook(
+                self.accelerator_save_state_pre_hook
+            )
+        ]
+
     def accelerator_save_state_pre_hook(
+        self,
         models: list[torch.nn.Module],
         weights: list[dict[str, torch.Tensor]],
         output_dir: str,
@@ -114,9 +168,8 @@ class TorchModelMixin(torch.nn.Module, ClassInitFromConfigMixin):
         if a model is an instance of `ModelMixin`, saves its configuration
         to a JSON file in the `output_dir`.
 
-        The configuration for the first model (index 0) is saved as
-        `model.config.json`, and subsequent models are saved as
-        `model_idx.config.json`.
+        The configuration is saved as `model_{id}.config.json` where `{id}`
+        corresponds to the model's `accelerate_model_id`.
 
         Note:
             This hook only saves the configuration. The model weights (`state_dict`)
@@ -129,14 +182,12 @@ class TorchModelMixin(torch.nn.Module, ClassInitFromConfigMixin):
                 this method as Accelerate handles weight saving.
             output_dir: The directory where the configuration files will be saved.
         """  # noqa: E501
-        for idx, model_i in enumerate(models):
-            if isinstance(model_i, ModelMixin):
-                if idx == 0:
-                    filename = "model.config.json"
-                else:
-                    filename = f"model_{idx}.config.json"
-                with open(os.path.join(output_dir, filename), "w") as f:
-                    f.write(model_i.cfg.model_dump_json(indent=4))
+
+        model_id = self.accelerate_model_id
+        filename = f"model_{model_id}.config.json"
+        logger.info(f"Saving model config to {filename}.")
+        with open(os.path.join(output_dir, filename), "w") as f:
+            f.write(self.cfg.model_dump_json(indent=4))
 
     def save_model(
         self,
@@ -172,6 +223,8 @@ class TorchModelMixin(torch.nn.Module, ClassInitFromConfigMixin):
                 is not empty.
         """  # noqa: E501
 
+        # TODO: Refactor to compatible with `accelerator.save_model()`.
+
         os.makedirs(directory, exist_ok=True)
         if required_empty and not is_empty_directory(directory):
             raise DirectoryNotEmptyError(f"{directory} is not empty!")
@@ -183,7 +236,7 @@ class TorchModelMixin(torch.nn.Module, ClassInitFromConfigMixin):
             f.write(self.cfg.model_dump_json(indent=4))
 
         model_state_dict = self.state_dict()
-
+        # TODO: No need to save shared_keys!
         if allow_shared_tensor:
             data_ptr_to_key = dict()
             shared_keys_map = dict()
@@ -215,7 +268,7 @@ class TorchModelMixin(torch.nn.Module, ClassInitFromConfigMixin):
         strict: bool = True,
         device: str = "cpu",
         model_prefix: str = "model",
-    ) -> "ModelMixin":
+    ) -> TorchModelMixin:
         """Loads a model from a local directory or the Hugging Face Hub.
 
         This method supports loading from a local path or a Hugging Face Hub
@@ -274,6 +327,9 @@ class TorchModelMixin(torch.nn.Module, ClassInitFromConfigMixin):
             ValueError: If the Hugging Face Hub URI is invalid.
         """  # noqa: E501
 
+        # TODO: Refactor to compatible with
+        # `accelerator.load_checkpoint_in_model()`.
+
         if directory.startswith("hf://"):
             directory = download_repo(directory, repo_type="model")
 
@@ -291,7 +347,7 @@ class TorchModelMixin(torch.nn.Module, ClassInitFromConfigMixin):
             in_cwd(directory),
             set_env(ORCHARD_LAB_CHECKPOINT_DIRECTORY=directory),
         ):
-            model = cfg()
+            model: TorchModelMixin = cfg()
 
         if not load_weight:
             return model
@@ -302,6 +358,8 @@ class TorchModelMixin(torch.nn.Module, ClassInitFromConfigMixin):
 
         state_dict = load_file(ckpt_path, device=device)
 
+        # TODO: No need to know shared_keys because tied weights can
+        # be discovered from model itself!
         shared_keys_map_path = os.path.join(
             directory, f"{model_prefix}.shared_keys.json"
         )

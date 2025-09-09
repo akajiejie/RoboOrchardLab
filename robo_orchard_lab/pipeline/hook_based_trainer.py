@@ -25,6 +25,7 @@ from accelerate.scheduler import AcceleratedScheduler
 from robo_orchard_core.utils.config import Config
 from torch.utils.data import DataLoader
 
+from robo_orchard_lab.models.torch_model import TorchModelMixin
 from robo_orchard_lab.pipeline.batch_processor.mixin import BatchProcessorMixin
 from robo_orchard_lab.pipeline.hooks.grad_clip import (
     GradientClippingHookConfig,
@@ -276,6 +277,10 @@ class HookBasedTrainer:
         self.max_step = max_step
         self.max_epoch = max_epoch
 
+        if isinstance(model, TorchModelMixin):
+            model.accelerate_model_id = len(accelerator._models)
+            model.accelerator_register_all_hooks(accelerator)
+
         # prepare using accelerator
         self.dataloader, self.model, self.optimizer, self.lr_scheduler = (
             accelerator.prepare(dataloader, model, optimizer, lr_scheduler)
@@ -332,6 +337,7 @@ class HookBasedTrainer:
             step_id=self.trainer_progress_state.step_id,
             global_step_id=self.trainer_progress_state.global_step_id,
             dataloader=self.dataloader,
+            model=self.model,
             optimizer=self.optimizer,
             lr_scheduler=self.lr_scheduler,
             start_epoch=self._start_epoch,

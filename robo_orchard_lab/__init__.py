@@ -28,10 +28,9 @@ from .version import __full_version__, __git_hash__, __version__
 def _set_env():
     import os
 
-    import torch
     from accelerate.utils import check_cuda_p2p_ib_support
 
-    if torch.cuda.is_available() and not check_cuda_p2p_ib_support():
+    if not check_cuda_p2p_ib_support():
         os.environ["NCCL_P2P_DISABLE"] = "1"
         os.environ["NCCL_IB_DISABLE"] = "1"
 

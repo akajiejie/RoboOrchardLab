@@ -270,31 +270,6 @@ class StatsMonitor(PipelineHooks):
             self.step_log_freq > 0
             and (args.global_step_id + 1) % self.step_log_freq == 0
         ):
-            # logging loss and learning rate in TensorBoard
-            model_outputs = args.model_outputs
-            if isinstance(model_outputs, dict):
-                for name, value in model_outputs.items():
-                    if "loss" not in name:
-                        continue
-                    args.accelerator.log(
-                        {f"Loss/{name}": value},
-                        step=args.global_step_id,
-                    )
-
-            args.accelerator.log(
-                {"Loss/Total_Loss": args.reduce_loss},
-                step=args.global_step_id,
-            )
-            for group_idx in range(len(args.optimizer.param_groups)):
-                args.accelerator.log(
-                    {
-                        f"LR/group{group_idx}": args.optimizer.param_groups[
-                            group_idx
-                        ]["lr"]
-                    },
-                    step=args.global_step_id,
-                )
-
             # logging training speed and estimated remaining time
             avg_step_time = sum(self._step_times) / len(self._step_times)
             speed = self.total_batch_size / avg_step_time
@@ -327,9 +302,13 @@ class StatsMonitor(PipelineHooks):
             msg += f"Estimated Remaining Time: {remaining_time_str}.\t"
 
             if args.optimizer is not None:
-                for group_idx in range(len(args.optimizer.param_groups)):
+                for idx, param in enumerate(args.optimizer.param_groups):
                     msg += "Learning Rate Group {}: {:.5e}.\t".format(
-                        group_idx, args.optimizer.param_groups[-1]["lr"]
+                        idx, param["lr"]
+                    )
+                    args.accelerator.log(
+                        {f"LR/group{idx}": param["lr"]},
+                        step=args.global_step_id,
                     )
 
             logger.info(msg)
@@ -414,10 +393,11 @@ class StatsMonitor(PipelineHooks):
             msg += f"Average Epoch Time: {avg_epoch_time:.2f} sec.\t"
             msg += f"Average Step Time: {avg_step_time:.2f} sec.\t"
             msg += f"Estimated Remaining Time: {remaining_time_str}.\t"
-            for group_idx in range(len(args.optimizer.param_groups)):
-                msg += "Learning Rate Group {}: {:.5e}.\t".format(
-                    group_idx, args.optimizer.param_groups[-1]["lr"]
-                )
+            if args.optimizer is not None:
+                for idx, param in enumerate(args.optimizer.param_groups):
+                    msg += "Learning Rate Group {}: {:.5e}.\t".format(
+                        idx, param["lr"]
+                    )
             logger.info(msg)
 
 
