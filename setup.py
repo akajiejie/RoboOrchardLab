@@ -205,7 +205,8 @@ if __name__ == "__main__":
         "torch>=2.4.0",
         "torchvision>=0.19.0",
         "numpy<2",  # dependencies may not be compatible with numpy 2.x
-        "accelerate",
+        "accelerate>=1.10.1",
+        "safetensors>=0.6.2",
         "tqdm",
         "deprecated",
         "timeout-decorator",
