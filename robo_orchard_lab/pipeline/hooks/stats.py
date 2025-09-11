@@ -69,7 +69,7 @@ class StatsMonitor(PipelineHooks):
 
         # accumulated step tiems
         self._step_times = deque(maxlen=cfg.window_size)
-        self._current_step_start_time = 0.0
+        self._last_step_end_time = 0.0
 
         # statistics for epoch callback
         self._epoch_start_time = None
@@ -83,7 +83,7 @@ class StatsMonitor(PipelineHooks):
         self.register_hook(
             channel="on_step",
             hook=HookContext.from_callable(
-                before=self._on_step_begin, after=self._on_step_end
+                before=None, after=self._on_step_end
             ),
         )
         self.register_hook(
@@ -241,9 +241,7 @@ class StatsMonitor(PipelineHooks):
         current_time = time.time()
         self._start_time = current_time
         self._estimate_data_stats(args.accelerator, args.dataloader)
-
-    def _on_step_begin(self, args: PipelineHookArgs) -> None:
-        self._current_step_start_time = time.time()
+        self._last_step_end_time = time.time()
 
     def _on_step_end(self, args: PipelineHookArgs) -> None:
         """Callback when step ends.
@@ -263,7 +261,9 @@ class StatsMonitor(PipelineHooks):
         if not args.accelerator.is_main_process:
             return
 
-        step_duration = time.time() - self._current_step_start_time
+        current_step_end_time = time.time()
+        step_duration = current_step_end_time - self._last_step_end_time
+        self._last_step_end_time = current_step_end_time
         self._step_times.append(step_duration)
 
         if (
