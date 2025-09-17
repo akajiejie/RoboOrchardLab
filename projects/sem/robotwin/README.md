@@ -130,7 +130,65 @@ accelerate launch  \
 
 ## Deploy
 
-Export ONNX:
+### Export data processor
+You can directly use the processor saved during the training phase(refer to [link](train.py#73)), or manually export the processor using the following command.
+```python
+from config_sem_robotwin import config, build_processor
+processor = build_processor(config)
+
+with open(f"{output_path}/processor.json")), "w") as fh:
+    fh.write(processor.cfg.model_dump_json(indent=4))
+```
+
+For the preprocessing of real-world deployment, the camera extrinsic parameters `T_world2cam` cannot be obtained directly.
+We provide a preprocessing function that calculates the extrinsic parameters online through calibration.
+The processor can be exported as follow:
+```python
+from config_sem_robotwin import config, build_processor
+config.update(
+    calibration=dict(  # example calibration
+        middle={
+            "position": [
+                -0.010783568385050412,
+                -0.2559182030838615,
+                0.5173197227547938,
+            ],
+            "orientation": [
+                -0.6344593881273598,
+                0.6670669773214551,
+                -0.2848079166270871,
+                0.2671467447131103,
+            ],
+        },
+        left={
+            "position": [-0.0693628, 0.04614798, 0.02938585],
+            "orientation": [
+                -0.13265687,
+                0.13223542,
+                -0.6930087,
+                0.69615791,
+            ],
+        },
+        right={
+            "position": [-0.0693628, 0.04614798, 0.02938585],
+            "orientation": [
+                -0.13265687,
+                0.13223542,
+                -0.6930087,
+                0.69615791,
+            ],
+        },
+    )
+)
+processor = build_processor(config)
+
+with open(f"{output_path}/processor.json"), "w") as fh:
+    fh.write(processor.cfg.model_dump_json(indent=4))
+```
+For more details, see the class [CalibrationToExtrinsic](../../../robo_orchard_lab/dataset/robotwin/transforms.py#L699).
+
+
+### Export ONNX
 ```bash
 cd projects/sem/robotwin
 
@@ -141,14 +199,29 @@ python3 onnx_scripts/export_onnx.py \
     --num_joint 14 \  # Exporting models with dynamic dimensions is not currently supported
     --validate
 ```
-Next, the ONNX model can be initialized and invoked as follows:
+
+### Inference
+Next, the ONNX model or torch model can be initialized and invoked as follows:
 ```python
 import sys
-from robo_orchard_lab.models.mixin import ModelMixin
 
-sys.path.append("projects/sem/robotwin/onnx_scripts")
-onnx_model = ModelMixin.load_model(output_path, load_weight=False)
-pred_actions = onnx_model(data)
+from robo_orchard_core.utils.config import load_config_class
+from robo_orchard_lab.models.mixin import ModelMixin
+from robo_orchard_lab.utils.path import in_cwd
+
+sys.path.append("projects/sem/robotwin/onnx_scripts")  # if use onnx model
+model = ModelMixin.load_model(output_path, load_weight=False)
+
+processor_cfg = load_config_class(
+    open(f"{output_path}/processor.json").read()
+)
+with in_cwd(output_path):
+    processor = processor_cfg()
+
+# init data dict with imgs, depths, text, intrinsic, joint_state
+data = processor.pre_process(data)
+model_outs = model(data)
+actions = processor.post_process(data, model_outs).action
 ```
 
 

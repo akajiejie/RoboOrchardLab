@@ -619,7 +619,9 @@ class DualArmKinematics:
         data["kinematics"] = self
         return data
 
-    def joint_state_to_robot_state(self, joint_state, embodiedment_mat=None):
+    def joint_state_to_robot_state(
+        self, joint_state, embodiedment_mat=None, return_matrix=False
+    ):
         input_shape = joint_state.shape
         joint_state = joint_state.to(torch.float32)
 
@@ -655,6 +657,12 @@ class DualArmKinematics:
         if embodiedment_mat is not None:
             link_poses = embodiedment_mat @ link_poses
 
+        if return_matrix:
+            link_poses = link_poses.unflatten(0, (len(self.keys), -1))
+            link_poses = link_poses.transpose(0, 1)
+            link_poses = link_poses.unflatten(0, input_shape[:-1])
+            return link_poses
+
         robot_states = torch.cat(
             [
                 link_poses[..., :3, 3],
@@ -686,6 +694,126 @@ class DualArmKinematics:
             [joint_state[..., None], robot_states], dim=-1
         )
         return robot_states
+
+
+class CalibrationToExtrinsic(DualArmKinematics):
+    """Converts camera calibration parameters into extrinsic matrices.
+
+    This class is designed to take camera calibration data (position and
+    orientation) and compute the corresponding extrinsic transformations
+    (i.e., the rigid transform from the camera frame to the end-effector or
+    robot base frame), based on given joint indices that specify how the
+    camera is mounted on the robot.
+
+    It inherits from `DualArmKinematics`, allowing it to leverage dual-arm
+    robot kinematics utilities if needed.
+
+    Args:
+        urdf (str): Path to the URDF file.
+        calibration (dict, optional): A dicti containing camera calibration.
+            Keys are camera names (e.g., 'left', 'right'), and values are
+                dicts with:
+            - 'position': list or array-like of [x, y, z].
+            - 'orientation': list or array-like of [qx, qy, qz, w].
+            If None, no calibration data is loaded initially.
+        cam_ee_joint_indices (dict, optional): A dictionary that maps camera
+            names to the index of the robot joint relative to which the
+            camera's calibration is defined. Typically, this is the joint index
+            of the end-effector or mounting point. If certain cameras do not
+            have their cam_ee_joint_indices, their calibration represents the
+            transform between the camera and the urdf base frame.
+            Defaults to {'left': 5, 'right': 12}.
+        cam_names (list, optional): A list of camera names specifying the
+            order in which cameras are processed or expected.
+        **kwargs: Additional keyword arguments passed to the parent class
+            `DualArmKinematics`.
+    """
+
+    def __init__(
+        self,
+        urdf,
+        calibration=None,
+        cam_ee_joint_indices=None,
+        cam_names=None,
+        **kwargs,
+    ):
+        super().__init__(urdf, **kwargs)
+        if calibration is not None:
+            self.calibration = self.calibration_handler(calibration)
+        else:
+            self.calibration = None
+        if cam_ee_joint_indices is None:
+            cam_ee_joint_indices = dict(left=5, right=12)
+        self.cam_ee_joint_indices = cam_ee_joint_indices
+        if cam_names is None and self.calibration is not None:
+            cam_names = list(self.calibration.keys())
+        self.cam_names = cam_names
+
+    def calibration_handler(self, calibration):
+        calibration = copy.deepcopy(calibration)
+        for k, v in calibration.items():
+            if isinstance(v, dict):
+                v = torch.from_numpy(self._pose_to_mat(v))
+            elif isinstance(v, (list, tuple)):
+                v = torch.Tensor(v)
+            elif isinstance(v, np.ndarray):
+                v = torch.from_numpy(v)
+            calibration[k] = torch.linalg.inv(v)
+        return calibration
+
+    def __call__(self, data):
+        if "calibration" in data:
+            calibrations = self.calibration_handler(data["calibration"])
+        else:
+            calibrations = self.calibration
+        if calibrations is None:
+            return data
+        current_joint_pose = self.joint_state_to_robot_state(
+            data["hist_joint_state"][-1][None], return_matrix=True
+        )[0]
+        cam_names = data.get("cam_names", self.cam_names)
+        t_base2cam_list = []
+        for cam in cam_names:
+            calibration = torch.clone(calibrations[cam])
+            if cam not in self.cam_ee_joint_indices:
+                t_base2cam = calibration
+            else:
+                idx = self.cam_ee_joint_indices[cam]
+                t_ee2cam = calibration
+                t_ee2base = torch.eye(4)
+                t_ee2base = current_joint_pose[idx]
+                t_base2cam = t_ee2cam @ torch.linalg.inv(t_ee2base).to(
+                    t_ee2cam
+                )
+            t_base2cam_list.append(t_base2cam)
+        t_base2cam = torch.stack(t_base2cam_list)
+        if "T_base2world" in data:
+            t_world2cam = torch.linalg.solve(
+                data["T_base2world"], t_base2cam, left=False
+            )
+        else:
+            t_world2cam = t_base2cam
+        data["T_world2cam"] = t_world2cam
+        return data
+
+    def _pose_to_mat(self, pose):
+        if "position" in pose:
+            x, y, z = pose["position"]
+        else:
+            x, y, z = pose["translation"]
+
+        if "orientation" in pose:
+            qx, qy, qz, w = pose["orientation"]
+        else:
+            qx, qy, qz, w = pose["rotation_xyzw"]
+        trans = np.array([x, y, z])
+        rot = Rotation.from_quat(
+            [qx, qy, qz, w], scalar_first=False
+        ).as_matrix()
+        ret = np.eye(4)
+        ret[:3, 3] = trans
+        ret[:3, :3] = rot
+        return ret
 
 
 class GetProjectionMat:

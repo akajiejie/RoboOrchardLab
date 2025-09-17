@@ -217,6 +217,7 @@ if __name__ == "__main__":
         "datasets>=4.0.0",
         "sqlalchemy",
         "duckdb-engine",
+        "duckdb<=1.3.2",
         "fsspec",
         "sortedcontainers",
         "numpydantic",

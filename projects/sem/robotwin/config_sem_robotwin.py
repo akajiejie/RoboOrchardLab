@@ -452,10 +452,11 @@ def build_model(config):
     return model
 
 
-def build_transforms(config):
+def build_transforms(config, calibration=None):
     from robo_orchard_lab.dataset.robotwin.transforms import (
         AddItems,
         AddScaleShift,
+        CalibrationToExtrinsic,
         ConvertDataType,
         DualArmKinematics,
         GetProjectionMat,
@@ -578,12 +579,23 @@ def build_transforms(config):
             "uuid",
         ],
     )
+
+    if calibration is not None:
+        calib_to_ext = dict(
+            type=CalibrationToExtrinsic,
+            calibration=calibration,
+            **config.get("kinematics_config", {}),
+        )
+    else:
+        calib_to_ext = dict(type=IdentityTransform)
+
     train_transforms = [
         add_data_relative_items,
         state_sampling,
         resize,
         img_channel_flip,
         to_tensor,
+        calib_to_ext,
         projection_mat,
         scale_shift,
         joint_state_noise,
@@ -597,6 +609,7 @@ def build_transforms(config):
         resize,
         img_channel_flip,
         to_tensor,
+        calib_to_ext,
         projection_mat,
         scale_shift,
         convert_dtype,
@@ -672,7 +685,7 @@ def build_processor(config):
         SEMProcessorCfg,
     )
 
-    transforms = build_transforms(config)[1]
+    transforms = build_transforms(config, config.get("calibration"))[1]
     transforms.append(dict(type=UnsqueezeBatch))
     processor = SEMProcessor(
         SEMProcessorCfg(
