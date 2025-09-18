@@ -14,19 +14,18 @@
 # implied. See the License for the specific language governing
 # permissions and limitations under the License.
 
-from robo_orchard_lab.envs.robotwin import RoboTwinEnv, RoboTwinEnvCfg
+"""Policy components and utilities.
 
+A policy is a function or a model that maps observations from the
+environment to actions. It can be deterministic or stochastic, and it is
+typically used in reinforcement learning to decide what action to take
+based on the current state of the environment.
 
-class TestRoboTwinEnv:
-    def test_init_without_expert_check(self):
-        env = RoboTwinEnv(
-            RoboTwinEnvCfg(
-                task_name="place_object_scale",
-                check_expert=False,
-                seed=1,
-                check_task_init=False,  # for fast initialization
-            )
-        )
-        env.reset()
-        assert env is not None
-        assert env._task is not None
+Policy is a specialized form of inference pipeline, which includes
+additional components for interacting with the environment, such as
+action sampling and state management.
+
+"""
+
+from .evaluator import *
+from .remote import *

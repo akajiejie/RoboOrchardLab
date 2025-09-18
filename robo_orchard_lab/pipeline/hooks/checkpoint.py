@@ -195,6 +195,9 @@ class SaveCheckpoint(PipelineHooks):
                 )
 
     def _on_loop_end(self, args: PipelineHookArgs) -> None:
+        if not self.cfg.save_when_loop_end:
+            return
+
         self._check(args.accelerator)
         save_location = self._save_state(args.accelerator)
         if args.accelerator.is_main_process:

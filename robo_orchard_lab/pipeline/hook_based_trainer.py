@@ -180,7 +180,8 @@ class HookBasedTrainer:
 
 
     Note:
-        The trainer will register the following default hooks in order:
+        The trainer will register the following default hooks in order
+        at beginning:
 
         - `GradientClippingHook`: This hook is responsible for clipping
             the gradients to prevent exploding gradients. It will be
