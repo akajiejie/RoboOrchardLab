@@ -19,10 +19,10 @@
   </a>
 </div>
 
-
 ## Prepare pre-trained weights
 
 The current project adopts the SEM-GroundingDINO architecture, utilizing GroundingDINO-tiny as the pre-trained model.
+
 ```bash
 cd projects/sem/robotwin
 mkdir ckpt
@@ -66,8 +66,8 @@ requests==2.32.3
 h5py==3.13.0
 ```
 
-
 ## Prepare the data
+
 First, run RoboTwin to obtain the expert data from the simulation.
 
 ```bash
@@ -75,8 +75,10 @@ git clone https://github.com/RoboTwin-Platform/RoboTwin.git
 cd RoboTwin
 git checkout e71140e9734e69686daa420a9be8b75a20ff4587  # TODO: Support the latest version
 ```
+
 Follow the instructions in the RobotWin code repository to download the required assets and generate data.
 Then, use the following command to package the data into LMDB format for training.
+
 ```bash
 cd path/to/robo_orchard_lab
 
@@ -89,6 +91,7 @@ python robo_orchard_lab/dataset/robotwin/robotwin_packer.py \
 ```
 
 Make sure the resulting data path is as follows:
+
 ```text
 projects/sem/robotwin
 └──data
@@ -102,6 +105,7 @@ projects/sem/robotwin
 ## Run
 
 Update the [URDF file directory in the config](./config_sem_robotwin.py#L21) to use the URDF provided by RoboTwin.
+
 ```bash
 cd projects/sem/robotwin
 CONFIG=config_sem_robotwin.py
@@ -127,11 +131,12 @@ accelerate launch  \
 # following instruction in ./sem_policy/README.md
 ```
 
-
 ## Deploy
 
 ### Export data processor
+
 You can directly use the processor saved during the training phase(refer to [link](train.py#73)), or manually export the processor using the following command.
+
 ```python
 from config_sem_robotwin import config, build_processor
 processor = build_processor(config)
@@ -143,6 +148,7 @@ with open(f"{output_path}/processor.json")), "w") as fh:
 For the preprocessing of real-world deployment, the camera extrinsic parameters `T_world2cam` cannot be obtained directly.
 We provide a preprocessing function that calculates the extrinsic parameters online through calibration.
 The processor can be exported as follow:
+
 ```python
 from config_sem_robotwin import config, build_processor
 config.update(
@@ -185,10 +191,11 @@ processor = build_processor(config)
 with open(f"{output_path}/processor.json"), "w") as fh:
     fh.write(processor.cfg.model_dump_json(indent=4))
 ```
+
 For more details, see the class [CalibrationToExtrinsic](../../../robo_orchard_lab/dataset/robotwin/transforms.py#L699).
 
-
 ### Export ONNX
+
 ```bash
 cd projects/sem/robotwin
 
@@ -201,7 +208,9 @@ python3 onnx_scripts/export_onnx.py \
 ```
 
 ### Inference
+
 Next, the ONNX model or torch model can be initialized and invoked as follows:
+
 ```python
 import sys
 
@@ -221,9 +230,8 @@ with in_cwd(output_path):
 # init data dict with imgs, depths, text, intrinsic, joint_state
 data = processor.pre_process(data)
 model_outs = model(data)
-actions = processor.post_process(data, model_outs).action
+actions = processor.post_process(model_outs, data).action
 ```
-
 
 ## Experimental Results
 
@@ -234,6 +242,6 @@ Training Configuration: 2 machines × 8 GPUs (100k steps for all tasks).
 |----------------|-------------|----------------|---------------|--------------------------|-----------------|--------------|------------------|-------------------------------|-----------------|------------|-------------------|-------------------------|-------------|---------|
 | **SEM**            | 97.0±1.4    | 96.7±1.2       | 69.0±5.1      | 76.3±2.6 / 89.7±1.7      | 56.3±4.2        | 56.3±5.3     | 51.7±2.6         | 98.0±0.8 / 60.7±0.5           | 87.0±2.2        | 98.7±0.5   | 73.3±0.9          | 12.3±4.8 / 6.0±1.6      | 88.3±1.2    | 69.8±2.7|
 
-
 ## :handshake: Acknowledgement
+
 [RoboTwin](https://github.com/TianxingChen/RoboTwin)
