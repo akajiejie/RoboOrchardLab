@@ -158,3 +158,5 @@ compile_commands.json
 
 ## Compiled MATLAB
 *.mex*
+converted_data/
+Real-World-Dataset/

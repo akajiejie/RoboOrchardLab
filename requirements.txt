@@ -1,0 +1,9 @@
+h5py                     3.14.0
+lmdb                     1.7.3
+numpy                    1.26.4
+numpydantic              1.6.11
+opencv-python            4.11.0.86
+torch                    2.8.0
+torchmetrics             1.8.2
+torchvision              0.23.0
+tqdm                     4.67.1
